@@ -1,0 +1,15 @@
+# Freshroots reorder rules: config v1.0
+# Every threshold used by the engine lives here (RULEBOOK Section 6).
+# Changes require Raghav Kulkarni + Deepa Nair sign-off (RULEBOOK Section 16).
+short_window_weeks: 4            # RULE-1 [EXP]
+long_window_weeks: 12            # RULE-1, average weekly sales [EXP]
+high_demand_threshold: 0.20      # RULE-1, strictly greater than [EXP]
+high_demand_multiplier: 1.5      # RULE-1 [EXP]
+festival_uplift: 0.25            # RULE-4 [EXP]
+cover_window:
+  Low:  {min_weeks: 6, max_weeks: 14}   # RULE-2, RULE-3 [EXP]
+  High: {min_weeks: 3, max_weeks: 4}    # RULE-5 [EXP]
+close_call_band_weeks: 0.5       # judgment zone "within half a week of a limit" [EXP]
+min_history_weeks: 12            # below this = new launch, judgment zone [RESOLVED→EXP, C1]
+inventory_max_age_days: 7        # input freshness check [SPEC]
+order_qty_rounding: ceil         # whole units [SPEC]; rounding direction [PENDING]

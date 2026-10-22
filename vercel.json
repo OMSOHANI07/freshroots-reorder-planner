@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["sin1"],
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 90,
+      "includeFiles": "{src/**,config.yaml,RULEBOOK.md}"
+    }
+  },
+  "rewrites": [{ "source": "/api/:path*", "destination": "/api/index" }]
+}
