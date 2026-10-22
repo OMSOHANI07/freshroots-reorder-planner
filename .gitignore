@@ -1,6 +1,5 @@
 .env
 .env.*
-!.env.example
 .venv/
 __pycache__/
 *.pyc
@@ -18,3 +17,4 @@ next-env.d.ts
 *.tsbuildinfo
 .vercel
 .env*
+!.env.example
