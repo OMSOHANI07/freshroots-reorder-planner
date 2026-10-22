@@ -16,3 +16,5 @@ playwright-report/
 .DS_Store
 next-env.d.ts
 *.tsbuildinfo
+.vercel
+.env*
