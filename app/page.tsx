@@ -34,11 +34,11 @@ export default function Home() {
             Reorder, rethought.
           </motion.h1>
           <motion.p variants={fadeUp} initial="hidden" animate="show" custom={2} className="mx-auto mt-5 max-w-2xl text-xl text-muted sm:text-2xl">
-            Weekly sales and stock in. A reorder plan Raghav trusts out. POs ready for Zoho.
+            Weekly SAP sales and stock in. One approval from Raghav. Purchase orders in Zoho.
           </motion.p>
           <motion.div variants={fadeUp} initial="hidden" animate="show" custom={3} className="mt-8 flex flex-wrap justify-center gap-3">
             {ready && !role && <PillLink href="/signin">Sign in</PillLink>}
-            {role === "raghav" && <PillLink href="/runs/new">Start a run</PillLink>}
+            {role === "analyst" && <PillLink href="/runs/new">Start a run</PillLink>}
             {role && latest && <PillLink href={runHref} variant="secondary">Open latest plan</PillLink>}
           </motion.div>
 
@@ -58,7 +58,7 @@ export default function Home() {
           {s && latest && (
             <p className="mt-4 text-sm text-muted">
               Run #{latest.id} · Order month {s.order_month}{s.is_festival ? " (festival)" : ""} · Inventory as of {s.as_of_date} ·{" "}
-              {latest.status === "final" ? "Approved by Raghav" : "Awaiting Raghav's approval"}
+              {latest.status === "final" ? "Approved by Raghav · POs in Zoho" : latest.status === "rejected" ? "Rejected by Raghav" : "Awaiting Raghav's approval"}
             </p>
           )}
         </Container>
@@ -68,7 +68,7 @@ export default function Home() {
         <Container>
           <Reveal>
             <p className="eyebrow text-white/60">How it works</p>
-            <h2 id="flow-title" className="section-title mt-2 max-w-3xl">Ten components. Six steps. One person decides.</h2>
+            <h2 id="flow-title" className="section-title mt-2 max-w-3xl">Ten components. Six steps. One approval.</h2>
           </Reveal>
         </Container>
         <ScrollStory />
@@ -83,7 +83,7 @@ export default function Home() {
                 <h2 className="section-title mt-2">AI vs Expert → Expert wins.</h2>
               </div>
               <p className="mt-6 text-lg text-muted">
-                The engine recommends and Gemini explains. Raghav&apos;s decision is the final value on every screen and every PO, with the engine&apos;s number beside it for reference.
+                The engine recommends and Gemini explains. Nothing reaches Zoho until Raghav approves the plan, and a rejected plan orders nothing.
               </p>
             </Tile>
           </Reveal>
@@ -96,8 +96,8 @@ export default function Home() {
               <ul className="mt-6 space-y-2 text-white/80">
                 <li>Every threshold comes from config.yaml.</li>
                 <li>No prices, lead times or stock on order are guessed.</li>
-                <li>No PO exists until Raghav finalises.</li>
-                <li>Nothing is sent to Zoho automatically.</li>
+                <li>No PO exists until Raghav approves.</li>
+                <li>Zoho gets exactly the approved quantities.</li>
               </ul>
             </Tile>
           </Reveal>

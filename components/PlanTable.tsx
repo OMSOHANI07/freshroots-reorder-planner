@@ -29,13 +29,12 @@ export function PlanTable({ lines, onOpen, finalView = false }: { lines: Line[];
       col.accessor("cover_weeks", { header: "Cover", cell: (c) => <span className="tabular">{n2(c.getValue())}<span className="text-muted"> / {c.row.original.min_weeks}–{c.row.original.max_weeks}</span></span> }),
       col.accessor("status", { header: "Status", cell: (c) => <StatusChip status={c.getValue()} /> }),
       col.accessor("action", { header: "Action", cell: (c) => <span className="text-[13px]">{ACTION_LABEL[c.getValue()]}</span> }),
-      col.accessor("order_qty_now", { header: finalView ? "Engine qty" : "Order now", cell: (c) => <span className={`tabular ${finalView ? "text-muted" : "font-semibold"}`}>{n0(c.getValue())}</span> }),
+      col.accessor("order_qty_now", { header: finalView ? "Approved qty" : "Order now", cell: (c) => <span className="tabular font-semibold">{n0(c.getValue())}</span> }),
     ];
     const tail = finalView
       ? [
-          col.display({ id: "final", header: "Raghav final", cell: (c) => <span className="tabular font-semibold">{n0(c.row.original.decision?.final_qty)}</span> }),
-          col.display({ id: "decision", header: "Decision", cell: (c) => <span className="text-[13px]">{c.row.original.decision?.decision ?? "—"}</span> }),
-          col.display({ id: "note", header: "Note", cell: (c) => <span className="text-[13px] text-muted">{c.row.original.decision?.note ?? ""}</span> }),
+          col.accessor("review_flags", { header: "Flags", enableSorting: false,
+            cell: (c) => <span className="flex gap-1">{flagsOf(c.getValue()).map((f) => <FlagChip key={f} code={f} title={FLAG_LABEL[f]} />)}</span> }),
         ]
       : [
           col.accessor("next_cycle_qty", { header: "Next cycle", cell: (c) => <span className="tabular text-muted">{n0(c.getValue())}</span> }),

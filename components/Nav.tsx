@@ -8,7 +8,7 @@ import { useRole } from "./Providers";
 
 const LINKS = [
   { href: "/", label: "Overview" },
-  { href: "/runs/new", label: "New run", raghavOnly: true },
+  { href: "/runs/new", label: "New run", analystOnly: true },
   { href: "/runs", label: "Plans" },
   { href: "/history", label: "History" },
 ];
@@ -17,8 +17,8 @@ export function Nav() {
   const { role, setRole } = useRole();
   const path = usePathname();
   const [open, setOpen] = useState(false);
-  const links = LINKS.filter((l) => !l.raghavOnly || role === "raghav");
-  const who = role === "raghav" ? "Raghav · Planner" : role === "procurement" ? "Procurement" : null;
+  const links = LINKS.filter((l) => !l.analystOnly || role === "analyst");
+  const who = role === "raghav" ? "Raghav · Approver" : role === "analyst" ? "Analyst" : role === "procurement" ? "Procurement" : null;
   return (
     <header className="sticky top-0 z-50 border-b border-black/10 bg-[rgba(251,251,253,0.72)] backdrop-blur-[20px] backdrop-saturate-150">
       <nav aria-label="Main" className="mx-auto flex h-11 max-w-6xl items-center justify-between px-4 sm:px-6">

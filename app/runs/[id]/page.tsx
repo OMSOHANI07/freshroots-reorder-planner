@@ -1,12 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
+import { ApprovalPanel } from "@/components/ApprovalPanel";
 import { PlanTable } from "@/components/PlanTable";
 import { useRole } from "@/components/Providers";
 import { RequireRole } from "@/components/RequireRole";
-import { OverrideRate, PlanDownloads, RunHeader, SummaryTiles } from "@/components/RunHeader";
+import { PlanDownloads, RunHeader, SourceTag, SummaryTiles } from "@/components/RunHeader";
 import { SkuDrawer } from "@/components/SkuDrawer";
 import { Container, ErrorBox, PillLink, Reveal, Spinner } from "@/components/ui";
 import { useRun } from "@/lib/useRun";
@@ -27,32 +27,36 @@ function Draft() {
         <h1 className="section-title mt-1">No plan was written.</h1>
         <p className="mt-3 text-muted">FATAL checks stop the run. Fix the files and run again.</p>
         <div className="mt-6"><ErrorBox messages={run.validation.errors} /></div>
-        {role === "raghav" && <PillLink href="/runs/new" className="mt-6">New run</PillLink>}
+        {role === "analyst" && <PillLink href="/runs/new" className="mt-6">New run</PillLink>}
       </Container>
     );
   }
 
+  const title = { draft: "This week's plan.", final: "Approved.", rejected: "Rejected.", failed: "" }[run.status];
+  const eyebrow = { draft: "Draft plan · Awaiting Raghav's approval", final: "Approved plan", rejected: `Rejected by ${run.finalised_by} · ${run.finalised_at_local}`, failed: "" }[run.status];
   return (
     <Container className="space-y-10 py-16">
-      <RunHeader run={run} eyebrow={run.status === "final" ? "Approved plan" : "Draft plan · Awaiting Raghav's approval"}
-        title={run.status === "final" ? "Approved and locked." : "This week's plan."}>
-        <PlanDownloads runId={run.id} />
-      </RunHeader>
-      {run.status === "draft" && (
+      <RunHeader run={run} eyebrow={eyebrow} title={title}><PlanDownloads runId={run.id} /></RunHeader>
+      <SourceTag run={run} />
+      {run.status === "rejected" && (
         <Reveal>
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-[22px] bg-ink px-6 py-5 text-white">
-            <div>
-              <p className="font-semibold">Awaiting Raghav&apos;s approval</p>
-              <p className="text-sm text-white/70">{run.summary!.needs_review} SKUs need an explicit decision. Procurement sees the final plan once Raghav finalises.</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <OverrideRate run={run} />
-              {role === "raghav" && <PillLink href={`/runs/${run.id}/review`}>Review decisions</PillLink>}
-            </div>
+          <div className="rounded-[22px] border border-amber/30 bg-amber-soft px-6 py-5">
+            <p className="font-semibold text-amber">Raghav rejected this plan. No POs were created.</p>
+            <p className="mt-1">“{run.review_note}”</p>
+            {role === "analyst" && <PillLink href="/runs/new" className="mt-4">Start a new run</PillLink>}
           </div>
         </Reveal>
       )}
-      {run.status === "final" && <PillLink href={`/runs/${run.id}/final`}>Open final dashboard</PillLink>}
+      {run.status === "final" && <PillLink href={`/runs/${run.id}/final`}>Open approved plan and POs</PillLink>}
+      {run.status === "draft" && role === "raghav" && <Reveal><ApprovalPanel run={run} onOpen={setOpen} /></Reveal>}
+      {run.status === "draft" && role !== "raghav" && (
+        <Reveal>
+          <div className="rounded-[22px] bg-ink px-6 py-5 text-white">
+            <p className="font-semibold">Awaiting Raghav&apos;s approval</p>
+            <p className="text-sm text-white/70">When Raghav approves, the purchase orders are created in Zoho Inventory automatically.</p>
+          </div>
+        </Reveal>
+      )}
       <SummaryTiles run={run} />
       <section aria-labelledby="plan-title">
         <div className="mb-4 flex items-end justify-between">
@@ -60,7 +64,7 @@ function Draft() {
           {explaining && <Spinner label="Writing AI explanations…" />}
         </div>
         <PlanTable lines={run.lines} onOpen={setOpen} />
-        <p className="mt-3 text-sm text-muted">Select a row for the 16-week sales sparkline, cover before and after, rules fired and the AI explanation. <Link className="text-accent" href="/history">History →</Link></p>
+        <p className="mt-3 text-sm text-muted">Select a row for the 16-week sales sparkline, cover before and after, rules fired and the AI explanation.</p>
       </section>
       <SkuDrawer line={open} onClose={() => setOpen(null)} />
     </Container>

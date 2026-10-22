@@ -1,12 +1,12 @@
 "use client";
 
-export type Role = "raghav" | "procurement";
+export type Role = "analyst" | "raghav" | "procurement";
 export const ROLE_KEY = "fr-role";
 
 export function getRole(): Role | null {
   try {
     const r = localStorage.getItem(ROLE_KEY);
-    return r === "raghav" || r === "procurement" ? r : null;
+    return r === "analyst" || r === "raghav" || r === "procurement" ? r : null;
   } catch {
     return null;
   }

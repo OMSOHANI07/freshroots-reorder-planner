@@ -18,24 +18,24 @@ from reorder.io import OPTIONAL_FILES, REQUIRED_FILES
 from reorder.output import plan_csv, plan_xlsx, run_log
 
 from . import po_docs, reasoning
-from .db import PO, AuditLog, Decision, Explanation, InputFileRec, PlanLine, POLine, Run, audit, get_session
+from .db import PO, AuditLog, Decision, Explanation, InputFileRec, PlanLine, POLine, Run, audit, get_session, utcnow
+from .zoho import ZohoClient, ZohoConfig, ZohoError
 from .settings import get_settings
 
 log = logging.getLogger("planner_api")
-app = FastAPI(title="Freshroots Reorder Planner API", version="1.1.0")
+app = FastAPI(title="Freshroots Reorder Planner API", version="1.2.0")
 
-Role = Literal["raghav", "procurement"]
-USERS = {"raghav": "Raghav Kulkarni", "procurement": "Procurement"}
-DECISIONS = ("APPROVE", "CHANGE", "REJECT", "HOLD")
-OVERRIDE_DECISIONS = ("CHANGE", "REJECT", "HOLD")
-PO_STATUSES = ("Generated", "Downloaded", "Entered in Zoho")
+# v1.2: the Analyst runs plans, Raghav only approves or rejects the whole plan,
+# approval creates the supplier POs in Zoho Inventory.
+USERS = {"analyst": "Analyst", "raghav": "Raghav Kulkarni", "procurement": "Procurement"}
+PO_STATUSES = ("Generated", "Downloaded", "Entered in Zoho", "Zoho sync failed")
 
 
 # ---------- roles ----------
 
 def current_role(x_role: str | None = Header(default=None)) -> str:
     if x_role not in USERS:
-        raise HTTPException(401, "Sign in as Raghav or Procurement (X-Role header)")
+        raise HTTPException(401, "Sign in as Analyst, Raghav or Procurement (X-Role header)")
     return x_role
 
 
@@ -67,13 +67,6 @@ def decisions_for(s: Session, run_id: int) -> dict[str, Decision]:
     return {d.sku_id: d for d in s.scalars(select(Decision).where(Decision.run_id == run_id))}
 
 
-def override_rate(lines: list[PlanLine], decs: dict[str, Decision]) -> float | None:
-    if not lines:
-        return None
-    n = sum(1 for l in lines if l.sku_id in decs and decs[l.sku_id].decision in OVERRIDE_DECISIONS)
-    return n / len(lines)
-
-
 def run_brief(s: Session, run: Run) -> dict:
     decs = decisions_for(s, run.id)
     lines = run.lines
@@ -90,7 +83,9 @@ def run_brief(s: Session, run: Run) -> dict:
         "config_sha256": run.config_sha256,
         "decided": len(decs),
         "sku_count": len(lines),
-        "override_rate": override_rate(lines, decs),
+        "source": run.source or "upload",
+        "source_run_id": run.source_run_id,
+        "review_note": run.review_note,
         "finalised_at": run.finalised_at.isoformat() if run.finalised_at else None,
         "finalised_at_local": local_ts(run.finalised_at),
         "finalised_by": run.finalised_by,
@@ -115,8 +110,25 @@ def regenerate(run: Run):
 @app.get("/api/health")
 def health():
     s = get_settings()
+    z = ZohoConfig.from_env()
     return {"ok": True, "gemini_configured": bool(s.gemini_api_key), "gemini_model": s.gemini_model,
-            "zoho_sync_enabled": s.zoho_sync_enabled}
+            "zoho_sync_enabled": z.enabled, "zoho_status": z.status()}
+
+
+def latest_dataset(s: Session) -> Run | None:
+    """'Fetch from SAP': the most recent run whose uploaded files passed validation."""
+    return s.scalars(select(Run).where(Run.status != "failed", Run.source == "upload")
+                     .order_by(Run.id.desc()).limit(1)).first()
+
+
+@app.get("/api/sap/latest")
+def sap_latest(role: str = Depends(current_role), s: Session = Depends(get_session)):
+    run = latest_dataset(s)
+    if run is None:
+        return None
+    return {"run_id": run.id, "uploaded_at_local": local_ts(run.created_at), "uploaded_by": run.created_by,
+            "as_of_date": (run.summary or {}).get("as_of_date"), "order_month": run.order_month,
+            "files": [{"name": f.name, "sha256": f.sha256, "rows": f.row_count} for f in run.files]}
 
 
 @app.get("/api/config")
@@ -130,9 +142,10 @@ def config_info():
 
 @app.post("/api/runs")
 async def create_run(
-    files: list[UploadFile] = File(...),
+    files: list[UploadFile] | None = File(default=None),
     run_date: str | None = Form(default=None),
-    role: str = Depends(require("raghav")),
+    source: Literal["upload", "sap_latest"] = Form(default="upload"),
+    role: str = Depends(require("analyst")),
     s: Session = Depends(get_session),
 ):
     st = get_settings()
@@ -142,9 +155,18 @@ async def create_run(
     except ValueError:
         raise HTTPException(400, "run_date must be YYYY-MM-DD")
     raw: dict[str, bytes] = {}
-    for f in files:
-        name = PurePath(f.filename or "").name
-        raw[name] = await f.read()
+    source_run = None
+    if source == "sap_latest":
+        source_run = latest_dataset(s)
+        if source_run is None:
+            raise HTTPException(409, "No SAP data has been uploaded yet. Upload the files first.")
+        raw = {f.name: f.content for f in source_run.files}
+    else:
+        if not files:
+            raise HTTPException(400, "Upload the SAP files, or choose the latest SAP data")
+        for f in files:
+            name = PurePath(f.filename or "").name
+            raw[name] = await f.read()
     cfg = load_config(st.config_path)
     res = run_plan(raw, cfg, rd)
     known = set(REQUIRED_FILES) | set(OPTIONAL_FILES)
@@ -160,6 +182,7 @@ async def create_run(
         config_text=cfg["_text"], config_sha256=cfg["_sha256"],
         rulebook_version=rulebook_version(st.rulebook_path),
         summary=res.summary or None, validation=validation, run_log=run_log(res),
+        source=source, source_run_id=source_run.id if source_run else None,
     )
     s.add(run)
     s.flush()
@@ -175,6 +198,7 @@ async def create_run(
                            distributor_id=ex["distributor_id"], row=r, extra=ex))
     audit(s, USERS[role], "run.create", run.id, f"run:{run.id}", None,
           {"status": run.status, "run_date": run.run_date, "run_date_overridden": rd != today,
+           "source": source, "source_run_id": run.source_run_id,
            "files": {n: res.files[n].sha256 for n in sorted(raw) if n in known}, "summary": res.summary or None})
     s.commit()
     body = {"run_id": run.id, "status": run.status, "validation": validation, "summary": res.summary or None}
@@ -244,95 +268,35 @@ def explain(run_id: int, role: str = Depends(current_role), s: Session = Depends
             "procurement_note": run.procurement_note, "procurement_note_source": run.procurement_note_source}
 
 
-class DecisionIn(BaseModel):
-    sku_id: str
-    decision: Literal["APPROVE", "CHANGE", "REJECT", "HOLD"]
-    final_qty: int | None = None
+class ReviewIn(BaseModel):
     note: str | None = None
 
 
-class DecisionsIn(BaseModel):
-    decisions: list[DecisionIn] = []
-    approve_all_unflagged: bool = False
-
-
-@app.post("/api/runs/{run_id}/decisions")
-def save_decisions(run_id: int, body: DecisionsIn, role: str = Depends(require("raghav")),
-                   s: Session = Depends(get_session)):
-    run = get_run(s, run_id)
+def _require_draft(run: Run) -> None:
     if run.status != "draft":
-        raise HTTPException(409, f"Run {run_id} is {run.status}; decisions are locked")
-    lines = {l.sku_id: l for l in run.lines}
-    decs = decisions_for(s, run_id)
-    items = list(body.decisions)
-    if body.approve_all_unflagged:
-        explicit = {d.sku_id for d in items}
-        items += [DecisionIn(sku_id=sid, decision="APPROVE") for sid, l in lines.items()
-                  if not l.needs_review and sid not in explicit and sid not in decs]
-    errors = []
-    for d in items:
-        line = lines.get(d.sku_id)
-        if line is None:
-            errors.append(f"{d.sku_id}: not in this run")
-            continue
-        note = (d.note or "").strip() or None
-        if d.decision == "APPROVE":
-            qty = line.order_qty_now  # Expert accepts the engine's quantity
-        elif d.decision == "CHANGE":
-            if d.final_qty is None or d.final_qty < 0:
-                errors.append(f"{d.sku_id}: CHANGE needs a final quantity (integer >= 0)")
-                continue
-            if not note:
-                errors.append(f"{d.sku_id}: CHANGE needs a note")
-                continue
-            qty = d.final_qty
-        else:  # REJECT / HOLD
-            if not note:
-                errors.append(f"{d.sku_id}: {d.decision} needs a note")
-                continue
-            qty = 0
-        if errors:
-            continue
-        prev = decs.get(d.sku_id)
-        before = decision_dict(prev)
-        if prev is None:
-            prev = Decision(run_id=run_id, sku_id=d.sku_id, decision=d.decision, final_qty=qty, note=note,
-                            decided_by=USERS[role])
-            s.add(prev)
-            decs[d.sku_id] = prev
-        else:
-            prev.decision, prev.final_qty, prev.note = d.decision, qty, note
-            prev.decided_by = USERS[role]
-            prev.decided_at = datetime.now(get_settings().timezone)
-        audit(s, USERS[role], "decision.save", run_id, f"sku:{d.sku_id}", before,
-              {"decision": d.decision, "final_qty": qty, "note": note, "engine_qty": line.order_qty_now})
-    if errors:
-        s.rollback()
-        raise HTTPException(422, {"errors": errors})
-    s.commit()
-    return run_brief(s, run)
+        raise HTTPException(409, f"Run {run.id} is {run.status}; it can no longer be approved or rejected")
 
 
-@app.post("/api/runs/{run_id}/finalise")
-def finalise(run_id: int, role: str = Depends(require("raghav")), s: Session = Depends(get_session)):
+@app.post("/api/runs/{run_id}/approve")
+def approve(run_id: int, body: ReviewIn | None = None, role: str = Depends(require("raghav")),
+            s: Session = Depends(get_session)):
+    """Raghav approves the whole plan: lock it, raise one PO per supplier, push each PO to Zoho."""
     run = get_run(s, run_id)
-    if run.status != "draft":
-        raise HTTPException(409, f"Run {run_id} is {run.status}")
-    decs = decisions_for(s, run_id)
-    undecided = [l.sku_id for l in run.lines if l.sku_id not in decs]
-    if undecided:
-        raise HTTPException(409, {"errors": [f"Every SKU needs a decision. Missing: {', '.join(undecided)}"]})
+    _require_draft(run)
     st = get_settings()
     now = datetime.now(st.timezone)
+    note = ((body.note if body else None) or "").strip() or None
     run.status = "final"
-    run.finalised_at = now
-    run.finalised_by = USERS[role]
+    run.finalised_at, run.finalised_by, run.review_note = now, USERS[role], note
+    # Approval applies the engine quantity to every line (v1.2: whole-plan decision).
+    for l in run.lines:
+        s.add(Decision(run_id=run_id, sku_id=l.sku_id, decision="APPROVE", final_qty=l.order_qty_now,
+                       note=note, decided_by=USERS[role], decided_at=now))
     s.flush()
 
-    # One PO per supplier, only for lines Raghav set above 0 (hard rule 2).
     by_supplier: dict[str, list[PlanLine]] = {}
     for l in run.lines:
-        if decs[l.sku_id].final_qty > 0:
+        if l.order_qty_now > 0:  # hard rule 2: paused, healthy and judgment-zone lines never get PO lines
             by_supplier.setdefault(l.distributor_id, []).append(l)
     stamp = now.strftime("%Y%m%d")
     created = []
@@ -343,26 +307,96 @@ def finalise(run_id: int, role: str = Depends(require("raghav")), s: Session = D
         first = lines[0]
         po = PO(run_id=run_id, po_number=f"{prefix}{seq:03d}", distributor_id=dist_id,
                 supplier_name=first.row["supplier_name"], supplier_region=first.extra.get("supplier_region", ""),
-                po_date=now.date().isoformat(), status="Generated",
-                total_qty=sum(decs[l.sku_id].final_qty for l in lines))
+                po_date=now.date().isoformat(), status="Generated", total_qty=sum(l.order_qty_now for l in lines))
         for l in lines:
-            d = decs[l.sku_id]
             po.lines.append(POLine(sku_id=l.sku_id, sku_name=l.row["sku_name"], uom=l.extra["uom"],
-                                   quantity=d.final_qty, decision_source=d.decision, engine_qty=l.order_qty_now))
+                                   quantity=l.order_qty_now, decision_source="APPROVE", engine_qty=l.order_qty_now))
         s.add(po)
         created.append(po)
     s.flush()
-    audit(s, USERS[role], "run.finalise", run_id, f"run:{run_id}", {"status": "draft"},
-          {"status": "final", "override_rate": override_rate(run.lines, decs),
-           "pos": [p.po_number for p in created]})
+    audit(s, USERS[role], "run.approve", run_id, f"run:{run_id}", {"status": "draft"},
+          {"status": "final", "note": note, "pos": [p.po_number for p in created],
+           "total_units": sum(p.total_qty for p in created)})
     s.commit()
+    sync_to_zoho(s, run, created, USERS[role])
     return {**run_brief(s, run), "pos": [po_dict(p) for p in created]}
+
+
+@app.post("/api/runs/{run_id}/reject")
+def reject(run_id: int, body: ReviewIn, role: str = Depends(require("raghav")), s: Session = Depends(get_session)):
+    run = get_run(s, run_id)
+    _require_draft(run)
+    note = (body.note or "").strip()
+    if not note:
+        raise HTTPException(422, {"errors": ["Rejecting a plan needs a note"]})
+    run.status = "rejected"
+    run.finalised_at, run.finalised_by, run.review_note = datetime.now(get_settings().timezone), USERS[role], note
+    audit(s, USERS[role], "run.reject", run_id, f"run:{run_id}", {"status": "draft"}, {"status": "rejected", "note": note})
+    s.commit()
+    return run_brief(s, run)
+
+
+# ---------- Zoho ----------
+
+_zoho_transport = None  # tests inject an httpx.MockTransport here
+
+
+def sync_to_zoho(s: Session, run: Run, pos: list[PO], actor: str) -> None:
+    """Create each PO in Zoho Inventory. Failures are recorded per PO and can be retried."""
+    cfg = ZohoConfig.from_env()
+    if not pos:
+        return
+    if not cfg.ready:
+        for p in pos:
+            if not p.zoho_po_id:
+                p.zoho_error = f"Zoho not connected: {cfg.status()}"
+        s.commit()
+        return
+    client = ZohoClient(cfg, transport=_zoho_transport)
+    for p in pos:
+        if p.zoho_po_id:
+            continue
+        before = {"status": p.status, "zoho_ref": p.zoho_ref}
+        try:
+            z = client.create_po(
+                po_number=p.po_number, vendor_name=p.supplier_name, date=p.po_date,
+                reference=f"Freshroots run {run.id} / {run.order_month}",
+                notes=f"Approved by {run.finalised_by} on {local_ts(run.finalised_at)}. "
+                      f"Generated by Freshroots Reorder Planner. Prices not in source data; set rates in Zoho.",
+                lines=[{"sku_id": l.sku_id, "quantity": l.quantity} for l in p.lines],
+            )
+            p.zoho_po_id = str(z.get("purchaseorder_id") or "")
+            p.zoho_ref = z.get("purchaseorder_number") or p.po_number
+            p.zoho_status = z.get("status")
+            p.zoho_error = None
+            p.status = "Entered in Zoho"
+            p.zoho_synced_at = utcnow()
+            audit(s, actor, "po.zoho_created", p.run_id, f"po:{p.po_number}", before,
+                  {"status": p.status, "zoho_ref": p.zoho_ref, "zoho_po_id": p.zoho_po_id, "zoho_status": p.zoho_status})
+        except (ZohoError, Exception) as exc:  # network errors included; never lose the approval
+            p.zoho_error = str(exc)[:500]
+            p.status = "Zoho sync failed"
+            audit(s, actor, "po.zoho_failed", p.run_id, f"po:{p.po_number}", before,
+                  {"status": p.status, "error": p.zoho_error})
+        s.commit()
+
+
+@app.post("/api/pos/{po_id}/zoho-sync")
+def retry_zoho(po_id: int, role: str = Depends(require("analyst", "procurement")), s: Session = Depends(get_session)):
+    p = s.get(PO, po_id)
+    if p is None:
+        raise HTTPException(404, "PO not found")
+    if p.zoho_po_id:
+        return po_dict(p)
+    sync_to_zoho(s, get_run(s, p.run_id), [p], USERS[role])
+    return po_dict(p)
 
 
 def po_dict(p: PO) -> dict:
     return {"id": p.id, "run_id": p.run_id, "po_number": p.po_number, "distributor_id": p.distributor_id,
             "supplier_name": p.supplier_name, "supplier_region": p.supplier_region, "po_date": p.po_date,
-            "status": p.status, "zoho_ref": p.zoho_ref, "total_qty": p.total_qty,
+            "status": p.status, "zoho_ref": p.zoho_ref, "zoho_po_id": p.zoho_po_id, "zoho_status": p.zoho_status,
+            "zoho_error": p.zoho_error, "total_qty": p.total_qty,
             "lines": [{"sku_id": l.sku_id, "sku_name": l.sku_name, "uom": l.uom, "quantity": l.quantity,
                        "decision_source": l.decision_source, "engine_qty": l.engine_qty} for l in p.lines]}
 
@@ -465,6 +499,8 @@ def patch_po(po_id: int, body: POPatch, role: str = Depends(require("procurement
     p = s.get(PO, po_id)
     if p is None:
         raise HTTPException(404, "PO not found")
+    if p.zoho_po_id:
+        raise HTTPException(409, "This PO was created in Zoho automatically")
     ref = body.zoho_ref.strip()
     if not ref:
         raise HTTPException(422, "Enter the Zoho PO reference")

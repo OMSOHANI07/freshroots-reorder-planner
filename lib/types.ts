@@ -22,14 +22,16 @@ export interface RunBrief {
   created_at_local: string;
   created_by: string;
   run_date: string;
-  status: "failed" | "draft" | "final";
+  status: "failed" | "draft" | "final" | "rejected";
   order_month: string | null;
   summary: Summary | null;
   rulebook_version: string;
   config_sha256: string;
   decided: number;
   sku_count: number;
-  override_rate: number | null;
+  source: "upload" | "sap_latest";
+  source_run_id: number | null;
+  review_note: string | null;
   finalised_at: string | null;
   finalised_at_local: string | null;
   finalised_by: string | null;
@@ -120,8 +122,11 @@ export interface PO {
   supplier_name: string;
   supplier_region: string;
   po_date: string;
-  status: "Generated" | "Downloaded" | "Entered in Zoho";
+  status: "Generated" | "Downloaded" | "Entered in Zoho" | "Zoho sync failed";
   zoho_ref: string | null;
+  zoho_po_id: string | null;
+  zoho_status: string | null;
+  zoho_error: string | null;
   total_qty: number;
   lines: POLine[];
 }

@@ -3,7 +3,7 @@
 import { download } from "@/lib/api";
 import type { RunDetail } from "@/lib/types";
 import { Button, CountUp, Reveal } from "./ui";
-import { n0, pct } from "@/lib/format";
+import { n0 } from "@/lib/format";
 
 export function RunHeader({ run, eyebrow, title, children }: { run: RunDetail; eyebrow: string; title: string; children?: React.ReactNode }) {
   const s = run.summary!;
@@ -56,12 +56,10 @@ export function PlanDownloads({ runId }: { runId: number }) {
   );
 }
 
-export function OverrideRate({ run }: { run: RunDetail }) {
-  const r = run.override_rate;
-  const over = r != null && r > 0.4;
+export function SourceTag({ run }: { run: RunDetail }) {
   return (
-    <span className={`rounded-full px-3 py-1 text-sm ${over ? "bg-red-soft text-red" : "bg-tile-alt"}`}>
-      Override rate {pct(r, 0)}{over ? " · above 40% kill line" : ""} · {n0(run.decided)}/{n0(run.sku_count)} decided
+    <span className="rounded-full bg-tile-alt px-3 py-1 text-sm">
+      {run.source === "sap_latest" ? `Latest SAP data (from run #${run.source_run_id})` : "New SAP upload"} · {n0(run.sku_count)} SKUs
     </span>
   );
 }

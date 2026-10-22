@@ -31,7 +31,10 @@ class Run(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     created_by: Mapped[str] = mapped_column(String(64))
     run_date: Mapped[str] = mapped_column(String(10))
-    status: Mapped[str] = mapped_column(String(16))  # failed | draft | final
+    status: Mapped[str] = mapped_column(String(16))  # failed | draft | final (approved) | rejected
+    source: Mapped[str] = mapped_column(String(16), default="upload")  # upload | sap_latest
+    source_run_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)  # Raghav's note on approve/reject
     order_month: Mapped[str | None] = mapped_column(String(7), nullable=True)
     config_text: Mapped[str] = mapped_column(Text)
     config_sha256: Mapped[str] = mapped_column(String(64))
@@ -41,7 +44,7 @@ class Run(Base):
     run_log: Mapped[str] = mapped_column(Text)
     procurement_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     procurement_note_source: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    finalised_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finalised_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # approved/rejected at
     finalised_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     files: Mapped[list["InputFileRec"]] = relationship(back_populates="run", cascade="all, delete-orphan")
@@ -111,7 +114,11 @@ class PO(Base):
     supplier_region: Mapped[str] = mapped_column(String(128))
     po_date: Mapped[str] = mapped_column(String(10))
     status: Mapped[str] = mapped_column(String(32), default="Generated")
-    zoho_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    zoho_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)      # Zoho PO number
+    zoho_po_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    zoho_status: Mapped[str | None] = mapped_column(String(32), nullable=True)    # draft | issued (as Zoho reports)
+    zoho_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    zoho_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     total_qty: Mapped[int] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     lines: Mapped[list["POLine"]] = relationship(back_populates="po", cascade="all, delete-orphan",
@@ -167,7 +174,29 @@ def init_engine(url: str | None = None) -> None:
         kwargs = {"poolclass": NullPool, "connect_args": {"prepare_threshold": None}}
     _engine = create_engine(url, **kwargs)
     Base.metadata.create_all(_engine)
+    if url.startswith("postgresql"):
+        _migrate(_engine)
     _Session = sessionmaker(bind=_engine, expire_on_commit=False)
+
+
+# Columns added after v1.1; create_all doesn't alter existing tables.
+MIGRATIONS = [
+    "ALTER TABLE runs ADD COLUMN IF NOT EXISTS source VARCHAR(16) DEFAULT 'upload'",
+    "ALTER TABLE runs ADD COLUMN IF NOT EXISTS source_run_id INTEGER",
+    "ALTER TABLE runs ADD COLUMN IF NOT EXISTS review_note TEXT",
+    "ALTER TABLE pos ADD COLUMN IF NOT EXISTS zoho_po_id VARCHAR(64)",
+    "ALTER TABLE pos ADD COLUMN IF NOT EXISTS zoho_status VARCHAR(32)",
+    "ALTER TABLE pos ADD COLUMN IF NOT EXISTS zoho_error TEXT",
+    "ALTER TABLE pos ADD COLUMN IF NOT EXISTS zoho_synced_at TIMESTAMPTZ",
+]
+
+
+def _migrate(engine) -> None:
+    from sqlalchemy import text
+
+    with engine.begin() as c:
+        for stmt in MIGRATIONS:
+            c.execute(text(stmt))
 
 
 def get_session() -> Iterator[Session]:

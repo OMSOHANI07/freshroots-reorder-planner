@@ -126,13 +126,13 @@ def template_procurement_note(rows: list[dict], summary: dict) -> str:
     n = summary["reorder_now"]
     units = summary["total_units_now"]
     flagged = [r["sku_id"] for r in rows if r["needs_raghav_review"]]
-    note = (f"This run recommends reordering {n} SKUs now for {units:,} units in total, "
-            f"grouped into one PO per supplier after Raghav's approval. ")
+    note = (f"This run recommends reordering {n} SKUs now for {units:,} units in total. "
+            f"Once Raghav approves the plan, one PO per supplier is created in Zoho Inventory. ")
     if summary["pause_next_order"]:
         note += f"{summary['pause_next_order']} SKUs are paused because of overstock. "
     if flagged:
-        note += f"Raghav reviewed flagged SKUs ({', '.join(flagged)}); use his final quantities. "
-    note += "Prices are not in the data: enter rates in Zoho Inventory."
+        note += f"Flagged for review: {', '.join(flagged)}. "
+    note += "Prices are not in the data: set rates on the Zoho POs."
     return note
 
 

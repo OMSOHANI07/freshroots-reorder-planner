@@ -4,12 +4,12 @@ import { AnimatePresence, motion, useMotionValueEvent, useReducedMotion, useScro
 import { useRef, useState } from "react";
 
 const STEPS = [
-  { title: "Data", tag: "SAP · Database", comps: "1 · 2", body: "Twice a week, SAP sales and stock land as five CSV files. Each run stores them with a file hash, so every number traces back to its source.", stat: "5 files · 12 checks" },
+  { title: "Data", tag: "SAP · Database", comps: "1 · 2", body: "Twice a week the Analyst runs the plan on the latest SAP data, or uploads new SAP files. Each run stores them with a file hash, so every number traces back to its source.", stat: "5 files · 12 checks" },
   { title: "Rules", tag: "AI rules · Raghav's rules", comps: "3 · 4", body: "The rule book, config.yaml and the festival calendar load with every run, version-stamped. Raghav's thresholds live in config, never in code.", stat: "RULEBOOK v1.1" },
   { title: "Predict", tag: "Rules engine", comps: "5", body: "A deterministic engine, not a model, works out cover, trend and festival uplift, then applies the decision table. Same inputs, same plan, byte for byte.", stat: "Deterministic" },
   { title: "Reasoning", tag: "Gemini", comps: "6", body: "Gemini explains each SKU in plain language. It never sets a number. Any figure it writes that the engine didn't compute is thrown out.", stat: "Explains only" },
-  { title: "Raghav approves", tag: "Human in the loop", comps: "7 · 8 · 9", body: "Flagged and judgment-zone SKUs come first. Raghav approves, changes or rejects each one, with a note. His decision is the final value everywhere.", stat: "Expert wins" },
-  { title: "PO", tag: "Zoho", comps: "10", body: "Approved lines become one PO per supplier: PDF, Excel and a Zoho import CSV. Procurement enters them in Zoho. Nothing is sent automatically.", stat: "PDF · Excel · CSV" },
+  { title: "Raghav approves", tag: "Human in the loop", comps: "7 · 8 · 9", body: "Raghav sees the plan with every flagged SKU called out, then does one thing: approve or reject. Nothing is ordered without that approval.", stat: "Expert wins" },
+  { title: "PO", tag: "Zoho", comps: "10", body: "The moment Raghav approves, one purchase order per supplier is created in Zoho Inventory. PDF and Excel copies stay available for procurement.", stat: "Straight to Zoho" },
 ];
 
 export function ScrollStory() {

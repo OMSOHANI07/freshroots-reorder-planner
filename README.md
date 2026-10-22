@@ -1,11 +1,12 @@
 # Freshroots Reorder Planner
 
 Turns weekly SAP sales and stock data into a reorder plan using Raghav Kulkarni's expert rules.
-Raghav approves, changes, rejects or holds every recommendation; approved lines become purchase
-orders (PDF, Excel, Zoho-import CSV) that procurement enters in Zoho Inventory by hand.
+An **Analyst** runs the plan on the latest SAP data (or uploads new SAP files). **Raghav approves or
+rejects the whole plan.** On approval the app creates one purchase order per supplier in
+**Zoho Inventory**; PDF, Excel and CSV copies stay available for procurement.
 
 **Principle: AI vs Expert → Expert wins.** The deterministic rules engine recommends, Gemini only
-explains, and Raghav's decision is the final value on every screen and document.
+explains, and nothing is ordered until Raghav approves.
 
 | # | Component | Where |
 |---|---|---|
@@ -13,8 +14,8 @@ explains, and Raghav's decision is the final value on every screen and document.
 | 3–4 | AI rules / Raghav's rules | `RULEBOOK.md`, `config.yaml`, `calendar.csv`, optional `judgment_overrides.csv` (version-stamped per run) |
 | 5 | Predict | `src/reorder/` — deterministic Python engine (RULEBOOK Sections 5–13) |
 | 6 | Reasoning | `src/planner_api/reasoning.py` — Gemini explanations with a number guardrail and template fallback |
-| 7–9 | Draft dashboard / Approve-reject / Final dashboard | `app/runs/[id]`, `app/runs/[id]/review`, `app/runs/[id]/final` |
-| 10 | PO raised | `src/planner_api/po_docs.py` — PDF, Excel, CSV, ZIP; Zoho API is a disabled stub (`zoho.py`) |
+| 7–9 | Draft dashboard / Approve-reject / Final dashboard | `app/runs/[id]` (Raghav's approve/reject panel), `app/runs/[id]/final` |
+| 10 | PO raised | `src/planner_api/zoho.py` creates POs in Zoho Inventory on approval; `po_docs.py` makes PDF, Excel, CSV, ZIP copies |
 
 ## Stack
 
@@ -35,8 +36,11 @@ make setup                # Python venv + npm install
 ```
 
 `.env` keys: `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_THINKING_LEVEL`, `DATABASE_URL`,
-`ZOHO_SYNC_ENABLED=false`, `APP_TIMEZONE=Asia/Kolkata`, `COMPANY_NAME`, `COMPANY_ADDRESS`
-(printed on every PO). Never commit `.env`; keys are never logged.
+`APP_TIMEZONE=Asia/Kolkata`, `COMPANY_NAME`, `COMPANY_ADDRESS` (printed on every PO), and the Zoho
+keys (`ZOHO_SYNC_ENABLED`, `ZOHO_DC`, `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN`,
+`ZOHO_ORGANIZATION_ID`, `ZOHO_MARK_ISSUED`). Never commit `.env`; keys are never logged.
+
+**Connecting Zoho:** follow [docs/ZOHO_SETUP.md](docs/ZOHO_SETUP.md).
 
 Use a separate Neon branch for local work (`dev`) and the default branch for production.
 
@@ -57,8 +61,9 @@ PYTHONPATH=src python -m reorder.cli --input tests/fixtures/oct_2026 --config co
 
 Exit codes: 0 success, 1 FATAL validation failure, 2 pre-send check failed.
 
-Sign in (local demo, no passwords) as **Raghav** (upload, run, decide, finalise, overrides) or
-**Procurement** (final dashboard, PO downloads, mark "Entered in Zoho"). The API enforces the role
+Sign in (local demo, no passwords) as **Analyst** (run on latest SAP data or upload, overrides,
+retry a failed Zoho sync), **Raghav** (approve or reject the plan, nothing else) or **Procurement**
+(approved plan, Zoho PO status, PO downloads). The API enforces the role
 on every action via the `X-Role` header, and every action is written to the audit log with
 who, when, what and the before/after values.
 
@@ -82,7 +87,9 @@ who, when, what and the before/after values.
 - **Lead times** — not in the data; "reorder now" doesn't model supplier lead time (Q6).
 - **Stock on order** — not counted in cover; Zoho on-order data isn't connected (Q7).
 - **Unit costs** — no prices; PO price columns print "—" with a note. Enter rates in Zoho.
-- **No live Zoho sync** — POs are files only. `src/planner_api/zoho.py` is a disabled stub (`ZOHO_SYNC_ENABLED=false`).
+- **Zoho matching** — vendors match on exact `Distributor_Name`, items on exact SKU; missing ones fail that PO with a reason (retryable).
+- **No rates in Zoho** — POs are created without `purchase_rate`; set rates in Zoho before issuing.
+- **Whole-plan approval** — R1 shortfalls aren't topped up and judgment-zone SKUs aren't ordered when a plan is approved (RULEBOOK v1.2).
 - **Zoho CSV columns** — a generic PO import layout (`Purchase Order Number, Purchase Order Date, Vendor Name, Reference#, Item Name, SKU, Quantity, Usage unit, Rate, Notes`) that could not be verified against Zoho's live docs; map columns in Zoho's import wizard if a label differs.
 - **Distributor-level behaviour** — sales are SKU-level, so unusual distributor behaviour enters only via overrides (J2).
 - **Auth** — demo role picker only; add real sign-in before production use.

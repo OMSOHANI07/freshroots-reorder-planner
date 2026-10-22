@@ -5,17 +5,19 @@ import path from "node:path";
 const FIX = path.join(__dirname, "..", "tests", "fixtures", "oct_2026");
 const FILES = ["weekly_sales.csv", "sku_master.csv", "current_inventory.csv", "calendar.csv", "distributor_master.csv"].map((f) => path.join(FIX, f));
 
-async function tile(page: Page, label: string) {
+function tile(page: Page, label: string) {
   return page.locator("div.rounded-\\[20px\\]", { has: page.getByText(label, { exact: true }) }).locator("span.tabular").first();
 }
 
-test("upload → run → review → finalise → download POs", async ({ page }, info) => {
-  // Sign in as Raghav
+async function signIn(page: Page, who: RegExp) {
   await page.goto("/signin");
-  await page.getByRole("button", { name: /Raghav Kulkarni/ }).click();
-  await expect(page).toHaveURL(/\/runs\/new/);
+  await page.getByRole("button", { name: who }).click();
+}
 
-  // Upload the October files and run with run date 2026-10-19
+test("analyst uploads → Raghav approves → POs to Zoho + downloads", async ({ page }, info) => {
+  await signIn(page, /^Data and runs Analyst/);
+  await expect(page).toHaveURL(/\/runs\/new/);
+  await page.getByRole("radio", { name: "Upload new files" }).click();
   await page.getByTestId("file-input").setInputFiles(FILES);
   await page.getByLabel("Run date").fill("2026-10-19");
   await page.getByRole("button", { name: "Run the plan" }).click();
@@ -23,50 +25,55 @@ test("upload → run → review → finalise → download POs", async ({ page },
   const runId = page.url().match(/runs\/(\d+)/)![1];
 
   // Summary: 5 reorder now, 2 paused, 8 healthy, 1,820 units, 4 flagged
-  await expect(await tile(page, "Reorder now")).toHaveText("5");
-  await expect(await tile(page, "Pause next order")).toHaveText("2");
-  await expect(await tile(page, "Healthy")).toHaveText("8");
-  await expect(await tile(page, "Units to order now")).toHaveText("1,820");
-  await expect(await tile(page, "Flagged for Raghav")).toHaveText("4");
+  await expect(tile(page, "Reorder now")).toHaveText("5");
+  await expect(tile(page, "Pause next order")).toHaveText("2");
+  await expect(tile(page, "Healthy")).toHaveText("8");
+  await expect(tile(page, "Units to order now")).toHaveText("1,820");
+  await expect(tile(page, "Flagged for Raghav")).toHaveText("4");
+  await expect(page.getByRole("button", { name: "Approve plan" })).toHaveCount(0); // analyst can't approve
 
-  // Review: approve SKU001 + SKU013, change SKU003 to 309, reject SKU007
-  await page.goto(`/runs/${runId}/review`);
-  const card = (sku: string) => page.locator(`article[aria-labelledby="t-${sku}"]`).first();
-  await expect(card("SKU001")).toBeVisible();
-  await card("SKU001").getByRole("button", { name: /^Approve/ }).click();
-  await expect(card("SKU001").getByText(/Raghav: Approve/)).toBeVisible();
-  await card("SKU013").getByRole("button", { name: /^Approve/ }).click();
-  await expect(card("SKU013").getByText(/Raghav: Approve/)).toBeVisible();
-
-  await card("SKU003").getByRole("button", { name: "Change" }).click();
-  await card("SKU003").getByLabel("Final quantity").fill("309");
-  await card("SKU003").getByLabel("Note (required)").fill("Top up to clear the 9-unit shortfall (R1)");
-  await card("SKU003").getByRole("button", { name: "Save change" }).click();
-  await expect(card("SKU003").getByText(/Raghav: Change · final 309 units/)).toBeVisible();
-
-  await card("SKU007").getByRole("button", { name: "Reject" }).click();
-  await card("SKU007").getByLabel("Note (required)").fill("Close call on cover; hold coconut water this cycle");
-  await card("SKU007").getByRole("button", { name: "Save reject" }).click();
-  await expect(card("SKU007").getByText(/Raghav: Reject · final 0 units/)).toBeVisible();
-
-  await page.getByRole("button", { name: /Approve all 11 unflagged/ }).click();
-  await page.getByRole("alertdialog").getByRole("button", { name: "Approve all" }).click();
-  const fin = page.getByRole("button", { name: "Finalise plan & generate POs" });
-  await expect(fin).toBeEnabled();
-  await fin.click();
-  await expect(page).toHaveURL(new RegExp(`/runs/${runId}/final$`), { timeout: 30_000 });
+  // Raghav: approve the whole plan
+  await signIn(page, /Raghav Kulkarni/);
+  await page.goto(`/runs/${runId}`);
+  await expect(page.getByRole("heading", { name: "Approve this plan?" })).toBeVisible();
+  await page.getByRole("button", { name: "Approve plan" }).click();
+  await page.getByLabel("Note (optional)").fill("Approved for October festival stock");
+  await page.getByRole("button", { name: "Confirm approval" }).click();
+  await expect(page).toHaveURL(new RegExp(`/runs/${runId}/final$`), { timeout: 60_000 });
   await expect(page.getByRole("heading", { name: "Purchase orders." })).toBeVisible();
-  await expect(page.locator("article[aria-labelledby^='po-']")).toHaveCount(3);
+  const tiles = page.locator("article[aria-labelledby^='po-']");
+  await expect(tiles).toHaveCount(3);
+  // each PO is either in Zoho or shows why it isn't (no credentials locally)
+  for (const t of await tiles.all()) {
+    await expect(t.getByText(/In Zoho Inventory as|Zoho not connected|not found in Zoho/)).toBeVisible();
+  }
 
-  // Download PDF, Excel, CSV and ZIP
   const dir = info.outputPath("downloads");
   for (const label of ["All PDF", "All Excel", "All Zoho CSV", "All as ZIP"]) {
     const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: label }).click()]);
     await dl.saveAs(path.join(dir, dl.suggestedFilename()));
   }
-
-  // Verify the files contain only approved quantities, grouped by supplier
   const out = execFileSync(path.join(__dirname, "..", ".venv", "bin", "python"),
     [path.join(__dirname, "..", "scripts", "verify_po_files.py"), dir], { encoding: "utf-8" });
   expect(out).toContain("PO FILES OK");
+});
+
+test("analyst reuses latest SAP data → Raghav rejects", async ({ page }) => {
+  await signIn(page, /^Data and runs Analyst/);
+  await expect(page.getByRole("radio", { name: "Latest SAP data" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByText("weekly_sales.csv")).toBeVisible();
+  await page.getByLabel("Run date").fill("2026-10-19");
+  await page.getByRole("button", { name: "Run the plan" }).click();
+  await expect(page).toHaveURL(/\/runs\/\d+$/, { timeout: 60_000 });
+  const runId = page.url().match(/runs\/(\d+)/)![1];
+  await expect(page.getByText(/Latest SAP data \(from run #\d+\)/)).toBeVisible();
+
+  await signIn(page, /Raghav Kulkarni/);
+  await page.goto(`/runs/${runId}`);
+  await page.getByRole("button", { name: "Reject plan" }).click();
+  await page.getByRole("button", { name: "Confirm rejection" }).click();
+  await expect(page.getByText("Add a note saying why the plan is rejected.")).toBeVisible();
+  await page.getByLabel(/Why are you rejecting it/).fill("Re-run after Thursday's SAP refresh");
+  await page.getByRole("button", { name: "Confirm rejection" }).click();
+  await expect(page.getByText("Raghav rejected this plan. No POs were created.")).toBeVisible({ timeout: 30_000 });
 });

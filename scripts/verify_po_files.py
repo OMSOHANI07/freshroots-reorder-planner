@@ -8,9 +8,9 @@ from pathlib import Path
 from openpyxl import load_workbook
 from pypdf import PdfReader
 
-EXPECTED = {  # supplier -> {sku: qty}; SKU003 changed to 309, SKU007 rejected, SKU006 paused
+EXPECTED = {  # supplier -> {sku: qty}; whole plan approved at engine quantities; SKU006, SKU007 paused
     "NutriFlow Distributors": {"SKU001": 750, "SKU013": 120},
-    "GrainPath Logistics": {"SKU003": 309, "SKU004": 150},
+    "GrainPath Logistics": {"SKU003": 300, "SKU004": 150},
     "Meridian Trade Co.": {"SKU011": 500},
 }
 NEVER = {"SKU006", "SKU007"}

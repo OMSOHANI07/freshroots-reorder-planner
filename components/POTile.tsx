@@ -8,7 +8,7 @@ import { api, download, errorMessages } from "@/lib/api";
 import { n0 } from "@/lib/format";
 import type { PO } from "@/lib/types";
 
-const STATUS_TONE = { Generated: "bg-grey-soft text-grey", Downloaded: "bg-amber-soft text-amber", "Entered in Zoho": "bg-green-soft text-green" };
+const STATUS_TONE = { Generated: "bg-grey-soft text-grey", Downloaded: "bg-grey-soft text-grey", "Entered in Zoho": "bg-green-soft text-green", "Zoho sync failed": "bg-red-soft text-red" };
 
 export function POTile({ po, onChange }: { po: PO; onChange: (p: PO) => void }) {
   const { role } = useRole();
@@ -16,6 +16,15 @@ export function POTile({ po, onChange }: { po: PO; onChange: (p: PO) => void }) 
   const [entering, setEntering] = useState(false);
   const [ref, setRef] = useState("");
   const [errs, setErrs] = useState<string[]>([]);
+  const [syncing, setSyncing] = useState(false);
+  const notConnected = !po.zoho_po_id && (po.zoho_error ?? "").startsWith("Zoho not connected");
+
+  async function retry() {
+    setErrs([]);
+    setSyncing(true);
+    try { onChange(await api<PO>(`/pos/${po.id}/zoho-sync`, { method: "POST" })); } catch (e) { setErrs(errorMessages(e)); }
+    setSyncing(false);
+  }
 
   async function dl(fmt: "pdf" | "xlsx" | "csv") {
     setMenu(false);
@@ -56,11 +65,20 @@ export function POTile({ po, onChange }: { po: PO; onChange: (p: PO) => void }) 
       <div className="mt-4 flex items-baseline justify-between border-t border-hairline/60 pt-3">
         <span className="text-sm text-muted">Total units</span><span className="tabular text-2xl font-semibold">{n0(po.total_qty)}</span>
       </div>
-      {po.zoho_ref && <p className="mt-1 text-sm text-green">Zoho ref {po.zoho_ref}</p>}
+      {po.zoho_po_id ? (
+        <p className="mt-2 text-sm text-green">In Zoho Inventory as {po.zoho_ref}{po.zoho_status ? ` · ${po.zoho_status}` : ""}</p>
+      ) : po.zoho_ref ? (
+        <p className="mt-2 text-sm text-green">Entered manually · Zoho ref {po.zoho_ref}</p>
+      ) : po.zoho_error ? (
+        <p role="status" className="mt-2 text-sm text-red">{po.zoho_error}</p>
+      ) : null}
       <div className="relative mt-4 flex flex-wrap gap-2">
         <Button size="sm" variant="secondary" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu((m) => !m)}>Download ▾</Button>
-        {role === "procurement" && po.status !== "Entered in Zoho" && (
-          <Button size="sm" variant="secondary" onClick={() => setEntering((x) => !x)}>Mark entered in Zoho</Button>
+        {(role === "procurement" || role === "analyst") && !po.zoho_po_id && !notConnected && !po.zoho_ref && (
+          <Button size="sm" disabled={syncing} onClick={retry}>{syncing ? "Sending…" : "Retry Zoho"}</Button>
+        )}
+        {role === "procurement" && !po.zoho_po_id && !po.zoho_ref && (
+          <Button size="sm" variant="secondary" onClick={() => setEntering((x) => !x)}>Entered manually</Button>
         )}
         <AnimatePresence>
           {menu && (

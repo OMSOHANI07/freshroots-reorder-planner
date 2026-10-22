@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { PlanTable } from "@/components/PlanTable";
 import { POTile } from "@/components/POTile";
 import { RequireRole } from "@/components/RequireRole";
-import { OverrideRate, PlanDownloads, RunHeader } from "@/components/RunHeader";
+import { PlanDownloads, RunHeader, SourceTag } from "@/components/RunHeader";
 import { SkuDrawer } from "@/components/SkuDrawer";
 import { Button, Container, CountUp, ErrorBox, PillLink, Reveal, Spinner } from "@/components/ui";
 import { api, download, errorMessages } from "@/lib/api";
@@ -27,14 +27,14 @@ function Final() {
     return (
       <Container className="py-16">
         <h1 className="section-title">Not final yet.</h1>
-        <p className="mt-3 text-lg text-muted">Raghav hasn&apos;t approved this plan. POs appear here once he finalises it.</p>
+        <p className="mt-3 text-lg text-muted">Raghav hasn&apos;t approved this plan. POs appear here once it is approved.</p>
         <PillLink href={`/runs/${run.id}`} className="mt-6" variant="secondary">See the draft</PillLink>
       </Container>
     );
   }
 
-  const engineTotal = run.lines.reduce((a, l) => a + l.order_qty_now, 0);
   const finalTotal = run.lines.reduce((a, l) => a + (l.decision?.final_qty ?? 0), 0);
+  const inZoho = pos?.filter((p) => p.zoho_po_id).length ?? 0;
   const refreshPos = () => api<PO[]>(`/runs/${id}/pos`).then(setPos).catch(() => {});
   async function dlAll(fmt: "pdf" | "xlsx" | "csv" | "zip") {
     try { await download(`/runs/${id}/pos/download?format=${fmt}`); refreshPos(); } catch (e) { setErrs(errorMessages(e)); }
@@ -47,9 +47,9 @@ function Final() {
       </RunHeader>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <Reveal><div className="rounded-[22px] bg-ink p-6 text-white"><p className="text-sm text-white/60">Raghav&apos;s final units</p><CountUp value={finalTotal} className="mt-1 block text-5xl font-semibold tracking-tight" /><p className="mt-2 text-sm text-white/60">Expert wins: this is the number on every PO.</p></div></Reveal>
-        <Reveal delay={0.05}><div className="h-full rounded-[22px] border border-hairline/70 bg-tile p-6"><p className="text-sm text-muted">Engine recommended</p><CountUp value={engineTotal} className="mt-1 block text-5xl font-semibold tracking-tight text-muted" /><p className="mt-2 text-sm text-muted">For reference only.</p></div></Reveal>
-        <Reveal delay={0.1}><div className="flex h-full flex-col justify-between rounded-[22px] border border-hairline/70 bg-tile p-6"><p className="text-sm text-muted">Decisions</p><OverrideRate run={run} /><p className="mt-2 text-sm text-muted">CHANGE + REJECT + HOLD as a share of all SKUs.</p></div></Reveal>
+        <Reveal><div className="rounded-[22px] bg-ink p-6 text-white"><p className="text-sm text-white/60">Units approved by Raghav</p><CountUp value={finalTotal} className="mt-1 block text-5xl font-semibold tracking-tight" /><p className="mt-2 text-sm text-white/60">{run.review_note ? `“${run.review_note}”` : "Approved as recommended."}</p></div></Reveal>
+        <Reveal delay={0.05}><div className="h-full rounded-[22px] border border-hairline/70 bg-tile p-6"><p className="text-sm text-muted">POs in Zoho Inventory</p><p className="mt-1 text-5xl font-semibold tracking-tight tabular">{pos ? `${inZoho}/${pos.length}` : "—"}</p><p className="mt-2 text-sm text-muted">{pos && inZoho < pos.length ? "Some POs need attention below." : "Created automatically on approval."}</p></div></Reveal>
+        <Reveal delay={0.1}><div className="flex h-full flex-col justify-between gap-3 rounded-[22px] border border-hairline/70 bg-tile p-6"><p className="text-sm text-muted">Data</p><SourceTag run={run} /><p className="text-sm text-muted">Run by {run.created_by} · run date {run.run_date}</p></div></Reveal>
       </div>
 
       <section aria-labelledby="po-title">
@@ -57,7 +57,7 @@ function Final() {
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <h2 id="po-title" className="section-title">Purchase orders.</h2>
-              <p className="mt-2 text-muted">One PO per supplier. Download, then enter each in Zoho Inventory. Nothing is sent automatically.</p>
+              <p className="mt-2 text-muted">One PO per supplier, created in Zoho Inventory when Raghav approved. Rates aren&apos;t in the data, so set them in Zoho.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="secondary" onClick={() => dlAll("pdf")}>All PDF</Button>
@@ -88,20 +88,20 @@ function Final() {
               <span className="rounded-full bg-tile px-2 py-0.5 text-[11px] text-muted">AI explanation · source: {run.procurement_note_source === "gemini" ? "Gemini" : "Template (code)"}</span>
             </div>
             <p className="mt-3 max-w-3xl text-[17px] leading-relaxed">{run.procurement_note}</p>
-            <p className="mt-2 text-sm text-muted">Where this note differs from Raghav&apos;s decisions below, Raghav&apos;s decisions apply.</p>
+            <p className="mt-2 text-sm text-muted">The approved quantities below and on the POs are the ones that apply.</p>
           </section>
         </Reveal>
       )}
 
       <section aria-labelledby="locked-title">
-        <h2 id="locked-title" className="mb-4 text-2xl font-semibold tracking-tight">Locked plan · engine vs Raghav</h2>
+        <h2 id="locked-title" className="mb-4 text-2xl font-semibold tracking-tight">Approved plan</h2>
         <PlanTable lines={run.lines} onOpen={setOpen} finalView />
       </section>
       <SkuDrawer line={open} onClose={() => setOpen(null)}>
         {open?.decision && (
           <section className="rounded-[20px] bg-ink p-5 text-white">
-            <p className="text-sm text-white/60">Raghav&apos;s decision (final)</p>
-            <p className="mt-1 text-2xl font-semibold">{open.decision.decision} · {open.decision.final_qty.toLocaleString("en-IN")} units</p>
+            <p className="text-sm text-white/60">Approved by Raghav</p>
+            <p className="mt-1 text-2xl font-semibold">{open.decision.final_qty.toLocaleString("en-IN")} units</p>
             {open.decision.note && <p className="mt-2 text-white/80">“{open.decision.note}”</p>}
             <p className="mt-2 text-xs text-white/50">{open.decision.decided_by} · {open.decision.decided_at_local}</p>
           </section>

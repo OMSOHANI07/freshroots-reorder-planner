@@ -26,6 +26,7 @@ const CHECKS: [string, string][] = [
 ];
 
 interface OverrideRow { sku: string; reason: string; until: string }
+interface Latest { run_id: number; uploaded_at_local: string; uploaded_by: string; as_of_date: string; order_month: string; files: { name: string; rows: number; sha256: string }[] }
 interface RunResp { run_id: number; status: string; validation: Validation; summary: Summary | null }
 
 function todayIST() {
@@ -43,7 +44,13 @@ function NewRun() {
   const [result, setResult] = useState<RunResp | null>(null);
   const [shown, setShown] = useState(0);
   const [err, setErr] = useState<string[]>([]);
+  const [source, setSource] = useState<"sap_latest" | "upload">("upload");
+  const [latest, setLatest] = useState<Latest | null | undefined>(undefined);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    api<Latest | null>("/sap/latest").then((l) => { setLatest(l); if (l) setSource("sap_latest"); }).catch(() => setLatest(null));
+  }, []);
 
   const addFiles = useCallback((list: FileList | File[]) => {
     const next: Record<string, File> = {};
@@ -56,7 +63,7 @@ function NewRun() {
     setIgnored(bad);
   }, []);
 
-  const ready = REQUIRED.every((n) => files[n]);
+  const ready = source === "sap_latest" ? !!latest : REQUIRED.every((n) => files[n]);
 
   async function run() {
     setErr([]);
@@ -64,11 +71,12 @@ function NewRun() {
     setShown(0);
     setPhase("running");
     const fd = new FormData();
-    Object.values(files).forEach((f) => fd.append("files", f, f.name));
+    fd.append("source", source);
+    if (source === "upload") Object.values(files).forEach((f) => fd.append("files", f, f.name));
     const rows = ovr.filter((o) => o.sku.trim());
-    if (!files[OVERRIDES] && rows.length) {
+    if (source === "upload" && !files[OVERRIDES] && rows.length) {
       const csv = ["SKU_ID,Reason,Entered_By,Valid_Until",
-        ...rows.map((o) => [o.sku.trim(), `"${o.reason.replace(/"/g, '""')}"`, "Raghav Kulkarni", o.until].join(","))].join("\n") + "\n";
+        ...rows.map((o) => [o.sku.trim(), `"${o.reason.replace(/"/g, '""')}"`, "Analyst", o.until].join(","))].join("\n") + "\n";
       fd.append("files", new File([csv], OVERRIDES, { type: "text/csv" }));
     }
     fd.append("run_date", runDate);
@@ -104,11 +112,40 @@ function NewRun() {
     <Container className="py-16">
       <Reveal>
         <p className="eyebrow text-muted">New run</p>
-        <h1 className="section-title mt-1">Drop this week&apos;s files.</h1>
-        <p className="mt-3 max-w-2xl text-lg text-muted">Five CSVs from SAP, plus Raghav&apos;s optional overrides. Planned cadence: twice weekly.</p>
+        <h1 className="section-title mt-1">Run this week&apos;s plan.</h1>
+        <p className="mt-3 max-w-2xl text-lg text-muted">Use the latest SAP data already in the system, or upload new SAP files. Raghav then approves or rejects the plan.</p>
+        <div role="radiogroup" aria-label="Data source" className="mt-6 inline-flex rounded-full bg-tile-alt p-1">
+          {([["sap_latest", "Latest SAP data"], ["upload", "Upload new files"]] as const).map(([v, label]) => (
+            <button key={v} role="radio" aria-checked={source === v} onClick={() => setSource(v)}
+              className={`relative rounded-full px-5 py-2 text-[15px] font-medium transition-colors ${source === v ? "text-ink" : "text-muted hover:text-ink"}`}>
+              {source === v && <motion.span layoutId="src-pill" className="absolute inset-0 rounded-full bg-tile shadow-[0_1px_3px_rgba(0,0,0,0.08)]" transition={{ type: "spring", stiffness: 500, damping: 35 }} />}
+              <span className="relative">{label}</span>
+            </button>
+          ))}
+        </div>
       </Reveal>
 
       <div className="mt-10 grid gap-6 lg:grid-cols-[1.3fr_1fr]">
+        {source === "sap_latest" ? (
+          <div className="rounded-[24px] border border-hairline/70 bg-tile p-6 sm:p-8">
+            <h2 className="text-lg font-semibold">Latest SAP data</h2>
+            {latest === undefined && <p className="mt-2 text-muted">Looking for the latest data…</p>}
+            {latest === null && <p className="mt-2 text-muted">No SAP data yet. Switch to <button className="text-accent" onClick={() => setSource("upload")}>Upload new files</button> for the first run.</p>}
+            {latest && (
+              <>
+                <p className="mt-1 text-sm text-muted">Uploaded {latest.uploaded_at_local} by {latest.uploaded_by} (run #{latest.run_id}) · inventory as of {latest.as_of_date} · order month {latest.order_month}</p>
+                <ul className="mt-5 grid gap-2 text-sm">
+                  {latest.files.map((f) => (
+                    <li key={f.name} className="flex items-center justify-between rounded-xl bg-tile-alt px-3 py-2">
+                      <span className="font-mono text-[13px]">{f.name}</span>
+                      <span className="tabular text-muted">{f.rows} rows · {f.sha256.slice(0, 8)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        ) : (
         <div className="space-y-6">
           <div
             onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
@@ -151,11 +188,12 @@ function NewRun() {
             <Button variant="secondary" size="sm" className="mt-3" onClick={() => setOvr([...ovr, { sku: "", reason: "", until: runDate }])}>Add override</Button>
           </div>
         </div>
+        )}
 
         <div className="space-y-6">
           <div className="rounded-[24px] border border-hairline/70 bg-tile p-6">
             <label htmlFor="run-date" className="text-lg font-semibold">Run date</label>
-            <p className="mt-1 text-sm text-muted">Defaults to today (IST). Raghav can set it to replay older data; the change is recorded in the audit log. I7 rejects inventory older than 7 days.</p>
+            <p className="mt-1 text-sm text-muted">Defaults to today (IST). Set it to replay older data; the change is recorded in the audit log. I7 rejects inventory older than 7 days.</p>
             <input id="run-date" type="date" value={runDate} onChange={(e) => setRunDate(e.target.value)}
               className="mt-3 w-full rounded-xl border border-hairline px-3 py-2" />
             <Button className="mt-5 w-full" size="lg" disabled={!ready || phase === "running" || phase === "checking"} onClick={run}>
@@ -218,5 +256,5 @@ function NewRun() {
 }
 
 export default function Page() {
-  return <RequireRole roles={["raghav"]}><NewRun /></RequireRole>;
+  return <RequireRole roles={["analyst"]}><NewRun /></RequireRole>;
 }

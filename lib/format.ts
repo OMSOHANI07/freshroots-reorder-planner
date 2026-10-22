@@ -33,3 +33,9 @@ export const FLAG_LABEL: Record<string, string> = {
 export const flagsOf = (s: string) => s.split(";").filter(Boolean);
 
 export const runHref = (r: { id: number; status: string }) => (r.status === "final" ? `/runs/${r.id}/final` : `/runs/${r.id}`);
+
+/** Share of decided plans Raghav rejected (feeds the 40% kill criterion). */
+export const rejectionRate = (runs: { status: string }[]) => {
+  const decided = runs.filter((r) => r.status === "final" || r.status === "rejected");
+  return decided.length ? decided.filter((r) => r.status === "rejected").length / decided.length : null;
+};

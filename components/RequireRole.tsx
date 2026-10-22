@@ -19,8 +19,8 @@ export function RequireRole({ children, roles }: { children: React.ReactNode; ro
   if (roles && !roles.includes(role)) {
     return (
       <Container className="py-24 text-center">
-        <h1 className="section-title">Raghav only.</h1>
-        <p className="mt-4 text-lg text-muted">Procurement can view the final plan and download POs, but can&apos;t edit decisions or rules.</p>
+        <h1 className="section-title">Not for this role.</h1>
+        <p className="mt-4 text-lg text-muted">The Analyst runs plans, Raghav approves or rejects them, and Procurement tracks the POs.</p>
         <PillLink href="/runs" className="mt-8" variant="secondary">See plans</PillLink>
       </Container>
     );

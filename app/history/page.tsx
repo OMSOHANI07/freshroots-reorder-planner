@@ -5,19 +5,21 @@ import { useEffect, useMemo, useState } from "react";
 import { RequireRole } from "@/components/RequireRole";
 import { Container, ErrorBox, Reveal, Spinner } from "@/components/ui";
 import { api, errorMessages } from "@/lib/api";
-import { n0, pct, runHref } from "@/lib/format";
+import { n0, pct, rejectionRate, runHref } from "@/lib/format";
 import type { AuditEntry, RunBrief } from "@/lib/types";
 
 function TrendChart({ runs }: { runs: RunBrief[] }) {
-  const pts = runs.filter((r) => r.status === "final" && r.override_rate != null).slice().reverse();
+  // cumulative rejection rate after each decided plan, oldest first
+  const decided = runs.filter((r) => r.status === "final" || r.status === "rejected").slice().reverse();
+  const pts = decided.map((r, i) => ({ id: r.id, override_rate: rejectionRate(decided.slice(0, i + 1)) }));
   const W = 640, H = 200, P = 28;
-  if (!pts.length) return <p className="text-sm text-muted">The trend appears once a run is finalised.</p>;
+  if (!pts.length) return <p className="text-sm text-muted">The trend appears once Raghav approves or rejects a plan.</p>;
   const x = (i: number) => P + (pts.length === 1 ? (W - 2 * P) / 2 : (i * (W - 2 * P)) / (pts.length - 1));
   const y = (v: number) => H - P - v * (H - 2 * P);
   const d = pts.map((r, i) => `${i ? "L" : "M"}${x(i)},${y(r.override_rate!)}`).join(" ");
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img"
-      aria-label={`Override rate by finalised run: ${pts.map((r) => `run ${r.id} ${pct(r.override_rate, 0)}`).join(", ")}. Kill line at 40%.`}>
+      aria-label={`Cumulative plan rejection rate after each decided run: ${pts.map((r) => `run ${r.id} ${pct(r.override_rate, 0)}`).join(", ")}. Kill line at 40%.`}>
       {[0, 0.2, 0.4, 0.6, 0.8, 1].map((t) => (
         <g key={t}>
           <line x1={P} x2={W - P} y1={y(t)} y2={y(t)} stroke="var(--hairline)" strokeWidth="1" strokeDasharray={t === 0.4 ? "0" : "2 4"} />
@@ -40,9 +42,11 @@ function TrendChart({ runs }: { runs: RunBrief[] }) {
 function describe(a: AuditEntry) {
   const after = a.after ?? {};
   switch (a.action) {
-    case "run.create": return `Created run (${String(after.status)}), run date ${String(after.run_date)}${after.run_date_overridden ? " (set by Raghav)" : ""}`;
-    case "decision.save": return `${a.entity?.replace("sku:", "")}: ${a.before ? `${String((a.before as Record<string, unknown>).decision)} ${String((a.before as Record<string, unknown>).final_qty)} → ` : ""}${String(after.decision)} ${String(after.final_qty)} (engine ${String(after.engine_qty)})${after.note ? ` · “${String(after.note)}”` : ""}`;
-    case "run.finalise": return `Finalised · override rate ${pct(after.override_rate as number, 0)} · POs ${(after.pos as string[]).join(", ") || "none"}`;
+    case "run.create": return `Ran the plan on ${after.source === "sap_latest" ? `latest SAP data (run #${String(after.source_run_id)})` : "new SAP upload"} → ${String(after.status)}, run date ${String(after.run_date)}${after.run_date_overridden ? " (set manually)" : ""}`;
+    case "run.approve": return `Approved the plan · ${n0(after.total_units as number)} units · POs ${(after.pos as string[]).join(", ") || "none"}${after.note ? ` · “${String(after.note)}”` : ""}`;
+    case "run.reject": return `Rejected the plan · “${String(after.note)}”`;
+    case "po.zoho_created": return `${a.entity?.replace("po:", "")} created in Zoho as ${String(after.zoho_ref)} (${String(after.zoho_status ?? "draft")})`;
+    case "po.zoho_failed": return `${a.entity?.replace("po:", "")} Zoho sync failed: ${String(after.error)}`;
     case "po.download": return `${a.entity?.replace("po:", "")} downloaded (${String(after.format)})`;
     case "po.entered_in_zoho": return `${a.entity?.replace("po:", "")} entered in Zoho · ref ${String(after.zoho_ref)}`;
     default: return a.action;
@@ -58,7 +62,7 @@ function History() {
   useEffect(() => {
     api<AuditEntry[]>(`/audit${runFilter ? `?run_id=${runFilter}` : ""}`).then(setAudit).catch((e) => setErr(errorMessages(e)));
   }, [runFilter]);
-  const finals = useMemo(() => runs?.filter((r) => r.status === "final") ?? [], [runs]);
+  const finals = useMemo(() => runs?.filter((r) => r.status === "final" || r.status === "rejected") ?? [], [runs]);
 
   return (
     <Container className="space-y-12 py-16">
@@ -68,10 +72,10 @@ function History() {
       </Reveal>
       <ErrorBox messages={err} />
       <section className="rounded-[24px] border border-hairline/70 bg-tile p-6" aria-labelledby="trend-title">
-        <h2 id="trend-title" className="text-xl font-semibold">Override rate trend</h2>
-        <p className="mt-1 text-sm text-muted">Share of SKUs Raghav changed, rejected or held. Above 40% triggers the kill criterion.</p>
+        <h2 id="trend-title" className="text-xl font-semibold">Plan rejection rate</h2>
+        <p className="mt-1 text-sm text-muted">Share of plans Raghav rejected, cumulative. Above 40% triggers the kill criterion.</p>
         <div className="mt-4">{runs ? <TrendChart runs={runs} /> : <Spinner />}</div>
-        {finals.length > 0 && <p className="mt-2 text-sm text-muted">Latest: {pct(finals[0].override_rate, 0)} on run #{finals[0].id}</p>}
+        {finals.length > 0 && <p className="mt-2 text-sm text-muted">Overall: {pct(rejectionRate(runs ?? []), 0)} of decided plans rejected</p>}
       </section>
 
       <section aria-labelledby="past-title">
@@ -79,7 +83,7 @@ function History() {
         <div className="mt-4 overflow-x-auto rounded-[20px] border border-hairline/70 bg-tile">
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead className="border-b border-hairline/70 text-[12px] text-muted"><tr>
-              {["Run", "Created", "Order month", "Status", "Reorder", "Units", "Flagged", "Override rate"].map((h) => <th key={h} scope="col" className="px-4 py-3 font-medium">{h}</th>)}
+              {["Run", "Created", "Order month", "Status", "Reorder", "Units", "Flagged", "Data"].map((h) => <th key={h} scope="col" className="px-4 py-3 font-medium">{h}</th>)}
             </tr></thead>
             <tbody>
               {runs?.map((r) => (
@@ -91,7 +95,7 @@ function History() {
                   <td className="tabular px-4 py-3">{r.summary?.reorder_now ?? "—"}</td>
                   <td className="tabular px-4 py-3">{n0(r.summary?.total_units_now)}</td>
                   <td className="tabular px-4 py-3">{r.summary?.needs_review ?? "—"}</td>
-                  <td className="tabular px-4 py-3">{pct(r.override_rate, 0)}</td>
+                  <td className="px-4 py-3 text-muted">{r.source === "sap_latest" ? "Latest SAP" : "Upload"}</td>
                 </tr>
               ))}
             </tbody>

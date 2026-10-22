@@ -5,12 +5,12 @@ import { useEffect, useState } from "react";
 import { RequireRole } from "@/components/RequireRole";
 import { Container, ErrorBox, PillLink, Reveal, Spinner } from "@/components/ui";
 import { api, errorMessages } from "@/lib/api";
-import { n0, pct, runHref } from "@/lib/format";
+import { n0, runHref } from "@/lib/format";
 import type { RunBrief } from "@/lib/types";
 import { useRole } from "@/components/Providers";
 
-const BADGE = { draft: "bg-grey-soft text-grey", final: "bg-green-soft text-green", failed: "bg-red-soft text-red" };
-const BADGE_LABEL = { draft: "Awaiting Raghav's approval", final: "Approved · locked", failed: "Failed validation" };
+const BADGE = { draft: "bg-grey-soft text-grey", final: "bg-green-soft text-green", failed: "bg-red-soft text-red", rejected: "bg-amber-soft text-amber" };
+const BADGE_LABEL = { draft: "Awaiting Raghav's approval", final: "Approved · POs in Zoho", failed: "Failed validation", rejected: "Rejected by Raghav" };
 
 function Runs() {
   const { role } = useRole();
@@ -25,7 +25,7 @@ function Runs() {
             <p className="eyebrow text-muted">Plans</p>
             <h1 className="section-title mt-1">Every run, on the record.</h1>
           </div>
-          {role === "raghav" && <PillLink href="/runs/new">New run</PillLink>}
+          {role === "analyst" && <PillLink href="/runs/new">New run</PillLink>}
         </div>
       </Reveal>
       <div className="mt-10"><ErrorBox messages={err} /></div>
@@ -42,7 +42,7 @@ function Runs() {
                 </div>
                 <div className="flex flex-wrap items-center gap-4 text-sm">
                   {r.summary && <span className="tabular text-muted">{r.summary.reorder_now} reorder · {n0(r.summary.total_units_now)} units · {r.summary.needs_review} flagged</span>}
-                  {r.status !== "failed" && <span className="tabular text-muted">{r.decided}/{r.sku_count} decided · override {pct(r.override_rate, 0)}</span>}
+                  <span className="text-muted">{r.source === "sap_latest" ? "Latest SAP data" : "Upload"}</span>
                   <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${BADGE[r.status]}`}>{BADGE_LABEL[r.status]}</span>
                 </div>
               </Link>
