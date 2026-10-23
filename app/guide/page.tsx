@@ -7,7 +7,7 @@ import type { Status } from "@/lib/types";
 
 type Lane = "analyst" | "planner" | "raghav" | "procurement";
 const LANE: Record<Lane, { label: string; dot: string; chip: string }> = {
-  analyst: { label: "Analyst", dot: "bg-accent", chip: "bg-accent/10 text-accent" },
+  analyst: { label: "Analyst", dot: "bg-accent", chip: "bg-accent/10 text-[#0058b0]" },
   planner: { label: "Planner (automatic)", dot: "bg-grey", chip: "bg-grey-soft text-grey" },
   raghav: { label: "Raghav", dot: "bg-ink", chip: "bg-ink text-white" },
   procurement: { label: "Procurement · Zoho", dot: "bg-green", chip: "bg-green-soft text-green" },
@@ -149,15 +149,17 @@ export default function Guide() {
             ))}
           </div>
           <AnimatePresence mode="wait">
-            <motion.ol key={role} role="tabpanel" aria-label={`${current.name} steps`} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.25 }} className="mt-8 space-y-3">
+            <motion.div key={role} role="tabpanel" aria-label={`${current.name} steps`} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25 }}>
+            <ol className="mt-8 space-y-3">
               {current.steps.map((t, i) => (
                 <li key={i} className="flex gap-4 rounded-[20px] bg-white/5 p-5">
-                  <span className="tabular text-2xl font-semibold text-white/40">{i + 1}</span>
+                  <span className="tabular text-2xl font-semibold text-white/60">{i + 1}</span>
                   <span className="text-[17px] leading-relaxed text-white/90">{t}</span>
                 </li>
               ))}
-            </motion.ol>
+            </ol>
+            </motion.div>
           </AnimatePresence>
         </Container>
       </section>
