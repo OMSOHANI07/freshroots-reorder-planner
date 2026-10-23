@@ -56,7 +56,7 @@ branch **`development`** for local work and tests. Tables (created and migrated 
 | `purchase_orders`, `purchase_order_lines` | POs per supplier, with Zoho status |
 | `audit_log` | Who did what, when, before and after |
 
-**User manual and flow chart:** [docs/USER_MANUAL.md](docs/USER_MANUAL.md), also on the site under **Guide**.
+**User manual and flow chart:** [PDF](docs/Freshroots_Reorder_Planner_User_Manual.pdf) · [Markdown](docs/USER_MANUAL.md) · on the site under **Guide**.
 
 ## How to run
 
