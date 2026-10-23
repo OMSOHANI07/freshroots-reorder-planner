@@ -22,7 +22,7 @@ flowchart TD
     F -- "No (note required)" --> F1["Plan rejected.<br/>Nothing is ordered."]
     F1 --> A
     F -- Yes --> G["Planner: one PO per supplier<br/>approved quantities only"]
-    G --> H["Zoho Inventory: Draft POs created<br/>(when connected)"]
+    G --> H["ERPNext: Draft POs created<br/>(when connected)"]
     G --> I["Procurement: PDF / Excel / CSV copies,<br/>add prices, issue POs"]
 
     classDef analyst fill:#e6f0fc,stroke:#0071e3,color:#1d1d1f;
@@ -40,7 +40,7 @@ flowchart TD
 | Blue | Analyst |
 | Grey | Planner (automatic) |
 | Black | Raghav |
-| Green | Procurement and Zoho |
+| Green | Procurement and ERPNext |
 
 ---
 
@@ -88,11 +88,11 @@ You can't change a single SKU's quantity. To change something, reject the plan w
 
 1. **Home** opens the latest approved plan. Or go to **Plans** and pick one marked *Approved*.
 2. Each supplier has one **purchase order** tile: its lines, total units and status.
-   - **In Zoho Inventory as …**: created in Zoho as a Draft. Open it in Zoho, add rates, issue it.
-   - **Zoho sync failed**: the tile says why (for example, a vendor or item missing in Zoho). Fix it in Zoho, then press **Retry Zoho**.
-   - **Zoho not connected**: use the downloads and enter the PO in Zoho by hand, then press **Entered manually** and type the Zoho reference.
-3. **Download** gives a PDF, Excel or Zoho CSV of one PO. **All as ZIP** gives everything for the plan.
-4. There are **no prices** in the source data. Add them in Zoho.
+   - **In ERPNext as PUR-ORD-…**: created in ERPNext as a Draft. Press **Open in ERPNext**, add rates and the real Required By date, then submit it.
+   - **ERPNext sync failed**: the tile says why (for example, a supplier or item missing in ERPNext). Fix it in ERPNext, then press **Retry ERPNext**.
+   - **ERPNext not connected**: use the downloads and enter the PO in ERPNext by hand, then press **Entered manually** and type the reference.
+3. **Download** gives a PDF, Excel or CSV of one PO. **All as ZIP** gives everything for the plan.
+4. There are **no prices or lead times** in the source data. Add them in ERPNext.
 
 ---
 
@@ -142,6 +142,6 @@ A flag never changes a quantity; it asks for a closer look.
 
 **Who can change a rule or threshold?** Only Raghav, with sign-off from Deepa Nair. See `RULEBOOK.md`, Section 16.
 
-**What if Zoho is down?** The approval still stands and the POs are kept. Each one shows the reason and can be retried.
+**What if ERPNext is down?** The approval still stands and the POs are kept. Each one shows the reason and can be retried.
 
 **Where is the history?** **History** shows every plan, the rejection rate (the kill line is 40%), and the audit log of who did what and when.

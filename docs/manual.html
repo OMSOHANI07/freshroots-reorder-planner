@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Freshroots Reorder Planner — User Manual</title>
+<!-- Source of docs/Freshroots_Reorder_Planner_User_Manual.pdf. Rebuild with: node scripts/build_manual_pdf.mjs -->
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm; }
+  :root { --ink:#1d1d1f; --muted:#6e6e73; --hair:#d2d2d7; --tile:#f5f5f7; --accent:#0071e3; --green:#1a7f37; --red:#c4302b; --amber:#9a5b00; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; color: var(--ink); font-size: 10.5pt; line-height: 1.5; margin: 0; }
+  h1 { font-size: 34pt; letter-spacing: -0.02em; line-height: 1.05; margin: 0; font-weight: 700; }
+  h2 { font-size: 18pt; letter-spacing: -0.01em; margin: 0 0 6pt; font-weight: 700; break-after: avoid; }
+  p { margin: 0 0 6pt; }
+  .muted { color: var(--muted); }
+  .eyebrow { font-size: 9pt; font-weight: 600; color: var(--green); letter-spacing: .02em; text-transform: uppercase; }
+  section { margin-top: 18pt; }
+  .page-break { break-before: page; }
+  .cover { height: 250mm; display: flex; flex-direction: column; justify-content: space-between; }
+  .cover .lead { font-size: 15pt; color: var(--muted); margin-top: 10pt; max-width: 120mm; }
+  .links { border-top: 1px solid var(--hair); padding-top: 12pt; }
+  .links table td { padding: 3pt 10pt 3pt 0; vertical-align: top; }
+  .links a { color: var(--accent); text-decoration: none; font-weight: 600; }
+  .roles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8pt; margin-top: 20pt; }
+  .role { border-radius: 12pt; padding: 12pt; background: var(--tile); }
+  .role.dark { background: var(--ink); color: #fff; }
+  .role b { display: block; font-size: 12pt; margin-top: 2pt; }
+  .role small { color: var(--muted); }
+  .role.dark small { color: #c7c7cc; }
+  ol.steps { list-style: none; padding: 0; margin: 6pt 0 0; counter-reset: s; }
+  ol.steps li { counter-increment: s; position: relative; padding: 6pt 0 6pt 28pt; border-bottom: 1px solid #ececf0; break-inside: avoid; }
+  ol.steps li::before { content: counter(s); position: absolute; left: 0; top: 5pt; width: 18pt; height: 18pt; border-radius: 50%; background: var(--ink); color: #fff; font-size: 9pt; font-weight: 700; display: grid; place-items: center; }
+  ul { margin: 4pt 0 6pt; padding-left: 16pt; }
+  table.grid { width: 100%; border-collapse: collapse; margin-top: 6pt; font-size: 10pt; }
+  table.grid th { text-align: left; font-size: 9pt; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--ink); padding: 4pt 6pt; }
+  table.grid td { border-bottom: 1px solid #ececf0; padding: 5pt 6pt; vertical-align: top; }
+  table.grid tr { break-inside: avoid; }
+  .chip { display: inline-block; border-radius: 99pt; padding: 1pt 7pt; font-size: 8.5pt; font-weight: 600; white-space: nowrap; }
+  .c-red { background:#fdecea; color: var(--red); } .c-amber { background:#fff3dc; color: var(--amber); }
+  .c-green { background:#e7f5eb; color: var(--green); } .c-grey { background:#ececf0; color:#5f5f64; }
+  .note { background: var(--tile); border-radius: 10pt; padding: 8pt 10pt; font-size: 9.5pt; margin-top: 6pt; break-inside: avoid; }
+  .tip { background: #fff3dc; color: #6b4000; border-radius: 10pt; padding: 8pt 10pt; font-size: 9.5pt; margin-top: 6pt; break-inside: avoid; }
+  code { font-family: "SF Mono", Menlo, monospace; font-size: 9pt; background: var(--tile); padding: 0 3pt; border-radius: 3pt; }
+  .ui { font-weight: 600; }
+  .flow { text-align: center; margin-top: 4pt; }
+  .legend { display: flex; gap: 8pt; justify-content: center; margin-top: 4pt; font-size: 9pt; }
+  .legend span { border-radius: 99pt; padding: 1pt 8pt; font-weight: 600; }
+  dl.faq dt { font-weight: 700; margin-top: 8pt; break-after: avoid; }
+  dl.faq dd { margin: 2pt 0 0; color: #3a3a3c; }
+</style></head>
+<body>
+
+<div class="cover">
+  <div>
+    <p class="eyebrow">Freshroots · Demand planning</p>
+    <h1 style="margin-top:10pt">Reorder Planner<br>User Manual</h1>
+    <p class="lead">SAP numbers in. One approval. Purchase orders out.</p>
+    <div class="roles">
+      <div class="role"><small>Analyst</small><b>Runs the plan.</b><small>Latest SAP data or a fresh upload, twice a week.</small></div>
+      <div class="role dark"><small>Raghav Kulkarni</small><b>Approves or rejects.</b><small>One decision. Nothing is ordered without it.</small></div>
+      <div class="role"><small>Procurement</small><b>Gets the orders.</b><small>One purchase order per supplier, straight into ERPNext.</small></div>
+    </div>
+  </div>
+  <div class="links">
+    <table>
+      <tr><td class="muted">Website</td><td><a href="https://freshroots-reorder-planner.vercel.app">freshroots-reorder-planner.vercel.app</a></td></tr>
+      <tr><td class="muted">In-app guide</td><td><a href="https://freshroots-reorder-planner.vercel.app/guide">freshroots-reorder-planner.vercel.app/guide</a></td></tr>
+      <tr><td class="muted">Code</td><td><a href="https://github.com/OMSOHANI07/freshroots-reorder-planner">github.com/OMSOHANI07/freshroots-reorder-planner</a></td></tr>
+      <tr><td class="muted">Rules</td><td>RULEBOOK.md, version 2.1 (pending sign-off by Raghav Kulkarni and Deepa Nair)</td></tr>
+      <tr><td class="muted">Date</td><td>23 October 2026</td></tr>
+    </table>
+  </div>
+</div>
+
+<div class="page-break"></div>
+<section style="margin-top:0">
+  <h2>1. How it works</h2>
+  <p class="muted">Seven steps. The colour shows who does each one.</p>
+  <div class="legend"><span style="background:#e6f0fc;color:#0058b0">Analyst</span><span style="background:#ececf0;color:#5f5f64">Planner (automatic)</span><span style="background:#1d1d1f;color:#fff">Raghav</span><span style="background:#e7f5eb;color:#1a7f37">Procurement · ERPNext</span></div>
+  <div class="flow">
+<svg viewBox="0 0 720 780" width="600" role="img" aria-label="Flow chart of the reorder planner" font-family="-apple-system, Helvetica Neue, Helvetica, Arial, sans-serif">
+  <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6e6e73"/></marker></defs>
+  <g stroke="#6e6e73" stroke-width="1.6" fill="none">
+    <path d="M360 80 V108" marker-end="url(#ar)"/><path d="M360 190 V218" marker-end="url(#ar)"/>
+    <path d="M470 150 H558" marker-end="url(#ar)"/><path d="M635 120 V50 H512" marker-end="url(#ar)"/>
+    <path d="M360 280 V308" marker-end="url(#ar)"/><path d="M360 370 V398" marker-end="url(#ar)"/>
+    <path d="M360 460 V488" marker-end="url(#ar)"/><path d="M250 530 H162" marker-end="url(#ar)"/>
+    <path d="M85 500 V50 H208" marker-end="url(#ar)"/><path d="M360 570 V598" marker-end="url(#ar)"/>
+    <path d="M360 660 V688" marker-end="url(#ar)"/>
+  </g>
+  <g font-size="11" fill="#6e6e73" font-weight="600">
+    <text x="372" y="210">Yes</text><text x="500" y="142">No</text><text x="372" y="590">Yes</text><text x="186" y="522">No</text>
+  </g>
+  <rect x="210" y="20" width="300" height="60" rx="14" fill="#e6f0fc" stroke="#0071e3"/>
+  <text x="360" y="45" text-anchor="middle" font-size="15" font-weight="700" fill="#1d1d1f">1 · Choose the data</text>
+  <text x="360" y="66" text-anchor="middle" font-size="11.5" fill="#3a3a3c">Latest SAP data, or upload the 5 files</text>
+  <polygon points="360,110 470,150 360,190 250,150" fill="#ececf0" stroke="#5f5f64"/>
+  <text x="360" y="146" text-anchor="middle" font-size="13" font-weight="700" fill="#1d1d1f">2 · 12 data checks</text>
+  <text x="360" y="163" text-anchor="middle" font-size="12" fill="#3a3a3c">all pass?</text>
+  <rect x="560" y="120" width="150" height="60" rx="14" fill="#e6f0fc" stroke="#0071e3"/>
+  <text x="635" y="145" text-anchor="middle" font-size="12" font-weight="700" fill="#1d1d1f">No plan is made</text>
+  <text x="635" y="163" text-anchor="middle" font-size="11" fill="#3a3a3c">Fix files, run again</text>
+  <rect x="210" y="220" width="300" height="60" rx="14" fill="#ececf0" stroke="#5f5f64"/>
+  <text x="360" y="245" text-anchor="middle" font-size="15" font-weight="700" fill="#1d1d1f">3 · Work out the plan</text>
+  <text x="360" y="266" text-anchor="middle" font-size="11.5" fill="#3a3a3c">Stock cover, trend, festival uplift per SKU</text>
+  <rect x="210" y="310" width="300" height="60" rx="14" fill="#ececf0" stroke="#5f5f64"/>
+  <text x="360" y="335" text-anchor="middle" font-size="15" font-weight="700" fill="#1d1d1f">4 · Explain it</text>
+  <text x="360" y="356" text-anchor="middle" font-size="11.5" fill="#3a3a3c">Gemini writes the reasons; never a number</text>
+  <rect x="210" y="400" width="300" height="60" rx="14" fill="#1d1d1f"/>
+  <text x="360" y="425" text-anchor="middle" font-size="15" font-weight="700" fill="#ffffff">5 · Raghav reviews the plan</text>
+  <text x="360" y="446" text-anchor="middle" font-size="11.5" fill="#d1d1d6">Headline numbers + flagged SKUs</text>
+  <polygon points="360,490 470,530 360,570 250,530" fill="#1d1d1f"/>
+  <text x="360" y="535" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">Approve?</text>
+  <rect x="10" y="500" width="150" height="60" rx="14" fill="#1d1d1f"/>
+  <text x="85" y="525" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">Rejected, with note</text>
+  <text x="85" y="543" text-anchor="middle" font-size="11" fill="#d1d1d6">Nothing is ordered</text>
+  <rect x="210" y="600" width="300" height="60" rx="14" fill="#ececf0" stroke="#5f5f64"/>
+  <text x="360" y="625" text-anchor="middle" font-size="15" font-weight="700" fill="#1d1d1f">6 · Raise purchase orders</text>
+  <text x="360" y="646" text-anchor="middle" font-size="11.5" fill="#3a3a3c">One PO per supplier, approved quantities</text>
+  <rect x="210" y="690" width="300" height="70" rx="14" fill="#e7f5eb" stroke="#1a7f37"/>
+  <text x="360" y="716" text-anchor="middle" font-size="15" font-weight="700" fill="#1d1d1f">7 · Orders go out</text>
+  <text x="360" y="736" text-anchor="middle" font-size="11.5" fill="#3a3a3c">Draft POs in ERPNext (once connected)</text>
+  <text x="360" y="752" text-anchor="middle" font-size="11.5" fill="#3a3a3c">PDF · Excel · CSV copies for procurement</text>
+</svg>
+  </div>
+</section>
+
+<div class="page-break"></div>
+<section style="margin-top:0">
+  <h2>2. Signing in</h2>
+  <p>Open the website and press <span class="ui">Sign in</span>. Choose your role: <span class="ui">Analyst</span>, <span class="ui">Raghav Kulkarni</span> or <span class="ui">Procurement</span>. Your <span class="ui">Home</span> screen then shows your one next step.</p>
+  <p class="note">The sign-in is a demo role picker for now. Add real logins before using it with live suppliers.</p>
+</section>
+
+<section>
+  <h2>3. Analyst: run the plan</h2>
+  <ol class="steps">
+    <li>Go to <span class="ui">New run</span>.</li>
+    <li>Choose the data: <span class="ui">Latest SAP data</span> (files already uploaded; shows when and by whom), or <span class="ui">Upload new files</span> and drop the five CSVs exported from SAP: <code>weekly_sales.csv</code>, <code>sku_master.csv</code>, <code>current_inventory.csv</code>, <code>calendar.csv</code>, <code>distributor_master.csv</code>.</li>
+    <li>Press <span class="ui">Run the plan</span>. The 12 data checks tick through one by one.</li>
+    <li><b>All passed:</b> the plan opens. You're done; it appears on Raghav's Home screen.</li>
+    <li><b>A check failed:</b> no plan is made. Read the red message, fix the file, run again.</li>
+  </ol>
+  <p class="tip"><b>"Stock data is recent" failed?</b> The stock date in <code>current_inventory.csv</code> is more than 7 days before today. Upload fresh data, or open <span class="ui">More options</span> and set the <span class="ui">Run date</span> within a week of the stock date (for replaying old data).</p>
+  <p class="note"><b>Optional · More options → Send a SKU to Raghav:</b> add a SKU, a reason the data can't show (for example, a competitor promotion) and a valid-until date. That SKU isn't ordered automatically.</p>
+</section>
+
+<section>
+  <h2>4. Raghav: approve or reject</h2>
+  <ol class="steps">
+    <li><span class="ui">Home</span> shows "Plan #N needs your decision". Press <span class="ui">Review the plan</span>.</li>
+    <li>Read the three headline numbers: SKUs to reorder, units to order, SKUs flagged.</li>
+    <li>Read the flagged SKUs in the decision panel. Tap any SKU for 16 weeks of sales, stock cover before and after the order, the rules that fired, and the plain-language reason.</li>
+    <li><b>Approve:</b> press <span class="ui">Approve plan</span>, add an optional note, press <span class="ui">Confirm approval</span>. Purchase orders are raised straight away.</li>
+    <li><b>Reject:</b> press <span class="ui">Reject plan</span>, say why (required), press <span class="ui">Confirm rejection</span>. Nothing is ordered.</li>
+  </ol>
+  <p class="note">A single SKU's quantity can't be changed. To change something, reject the plan with a note and ask the Analyst to re-run.</p>
+</section>
+
+<section class="page-break">
+  <h2>5. Procurement: purchase orders</h2>
+  <ol class="steps">
+    <li><span class="ui">Home</span> opens the latest approved plan; or go to <span class="ui">Plans</span> and pick one marked <i>Approved</i>.</li>
+    <li>Each supplier has one purchase-order tile with its lines, total units and status.</li>
+    <li><b>In ERPNext as PUR-ORD-…</b> — created in ERPNext as a Draft. Press <span class="ui">Open in ERPNext</span>, add rates and the real Required By date, then submit it.</li>
+    <li><b>ERPNext sync failed</b> — the tile says why (for example, a supplier or item missing in ERPNext). Fix it in ERPNext, then press <span class="ui">Retry ERPNext</span>.</li>
+    <li><b>ERPNext not connected</b> — use the downloads, enter the PO in ERPNext by hand, then press <span class="ui">Entered manually</span> and type the reference.</li>
+    <li><span class="ui">Download</span> gives a PDF, Excel or CSV of one PO; <span class="ui">All as ZIP</span> gives everything for the plan.</li>
+  </ol>
+  <p class="tip">There are <b>no prices or lead times</b> in the source data. Add them in ERPNext before submitting a PO.</p>
+</section>
+
+<section>
+  <h2>6. Data</h2>
+  <p>The <span class="ui">Data</span> page shows what the latest plan was built on. It's read-only and changes only with the next SAP upload.</p>
+  <ul>
+    <li><b>SKUs</b> — name, supplier, perishability, standard order quantity, stock on hand, 16-week sales line.</li>
+    <li><b>Suppliers</b> — name, region, and how many SKUs each supplies.</li>
+    <li><b>Festival calendar</b> — festival months (expected demand +25%).</li>
+    <li><b>Overrides</b> — SKUs sent to Raghav by hand.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>7. What the colours mean</h2>
+  <table class="grid">
+    <tr><th style="width:26%">Status</th><th>Meaning</th><th style="width:36%">What happens</th></tr>
+    <tr><td><span class="chip c-red">Stockout risk</span></td><td>Stock lasts less than the minimum weeks</td><td>Reorder now: standard quantity, or 1.5× if sales are up more than 20%</td></tr>
+    <tr><td><span class="chip c-amber">Overstock</span></td><td>Stock lasts more than the maximum weeks</td><td>Pause the next order</td></tr>
+    <tr><td><span class="chip c-green">Healthy</span></td><td>Stock cover is inside the window</td><td>No order now; next order 1.5× if sales are rising</td></tr>
+    <tr><td><span class="chip c-grey">Judgment zone</span></td><td>The rules can't decide</td><td>Nothing ordered automatically</td></tr>
+  </table>
+  <p class="note"><b>Healthy windows:</b> long-life SKUs 6–14 weeks of stock; perishable SKUs 3–4 weeks.</p>
+</section>
+
+<section>
+  <h2>8. What the flags mean</h2>
+  <p class="muted">A flag never changes a quantity; it asks for a closer look.</p>
+  <table class="grid">
+    <tr><th style="width:12%">Flag</th><th>Meaning</th></tr>
+    <tr><td><b>R1</b></td><td>Even after the order, stock stays below the minimum</td></tr>
+    <tr><td><b>R2</b></td><td>Within half a week of a limit: a close call</td></tr>
+    <tr><td><b>R3</b></td><td>Sales spiked in a festival month; the uplift may count twice</td></tr>
+    <tr><td><b>R4</b></td><td>The order pushes stock above the maximum</td></tr>
+    <tr><td><b>J1</b></td><td>New product, or less than 12 weeks of sales</td></tr>
+    <tr><td><b>J2</b></td><td>Sent to Raghav by hand, with a reason</td></tr>
+    <tr><td><b>J3</b></td><td>No sales in 12 weeks, so cover can't be worked out</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>9. Questions</h2>
+  <dl class="faq">
+    <dt>Who decides how much to order?</dt><dd>The rules engine, using Raghav's thresholds. Raghav approves or rejects the plan. AI only explains.</dd>
+    <dt>Who can change a rule or threshold?</dt><dd>Only Raghav, with sign-off from Deepa Nair (Head of Operations). See RULEBOOK.md, Section 16. Procurement and the Analyst can't.</dd>
+    <dt>When is a month a festival month?</dt><dd>Only when the festival calendar marks it. Today: March, October and November. Expected demand goes up 25%.</dd>
+    <dt>Why are there no prices on the POs?</dt><dd>The SAP files have no unit costs, and the planner never guesses. Add rates in ERPNext.</dd>
+    <dt>What if ERPNext is down or not connected?</dt><dd>The approval still stands and the POs are kept. Each one shows the reason and can be retried or entered by hand.</dd>
+    <dt>Where is the history?</dt><dd><span class="ui">History</span> shows every plan, the rejection rate (the kill line is 40%), and the audit log of who did what and when.</dd>
+  </dl>
+</section>
+
+</body></html>

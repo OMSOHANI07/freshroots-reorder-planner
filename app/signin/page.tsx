@@ -7,9 +7,9 @@ import { Container } from "@/components/ui";
 import type { Role } from "@/lib/api";
 
 const ROLES: { role: Role; name: string; title: string; can: string[] }[] = [
-  { role: "analyst", name: "Analyst", title: "Data and runs", can: ["Run the plan on the latest SAP data", "Or upload new SAP files", "Add judgment-zone overrides", "Retry a failed Zoho sync"] },
-  { role: "raghav", name: "Raghav Kulkarni", title: "Demand Planner", can: ["Review the plan", "Approve or reject it", "Approval creates the POs in Zoho"] },
-  { role: "procurement", name: "Procurement", title: "Purchasing team", can: ["View the approved plan", "Track POs in Zoho", "Download PO files", "Can't edit decisions or rules"] },
+  { role: "analyst", name: "Analyst", title: "Data and runs", can: ["Run the plan on the latest SAP data", "Or upload new SAP files", "Add judgment-zone overrides", "Retry a failed ERPNext sync"] },
+  { role: "raghav", name: "Raghav Kulkarni", title: "Demand Planner", can: ["Review the plan", "Approve or reject it", "Approval creates the POs in ERPNext"] },
+  { role: "procurement", name: "Procurement", title: "Purchasing team", can: ["View the approved plan", "Track POs in ERPNext", "Download PO files", "Can't edit decisions or rules"] },
 ];
 
 export default function SignIn() {

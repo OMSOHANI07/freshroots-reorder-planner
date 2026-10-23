@@ -39,12 +39,12 @@ for sup, lines in EXPECTED.items():
 rows = list(csv.DictReader(io.StringIO(csv_f.read_text())))
 got: dict = {}
 for r in rows:
-    got.setdefault(r["Vendor Name"], {})[r["SKU"]] = int(r["Quantity"])
+    got.setdefault(r["Supplier"], {})[r["Item Code"]] = int(r["Quantity"])
 assert got == EXPECTED, got
 
 z = zipfile.ZipFile(zf)
 assert z.testzip() is None
 names = z.namelist()
-assert "all_pos.pdf" in names and "all_pos.xlsx" in names and "zoho_import_all_pos.csv" in names
+assert "all_pos.pdf" in names and "all_pos.xlsx" in names and "all_pos.csv" in names
 assert len([n for n in names if n.startswith("pdf/")]) == 3
 print("PO FILES OK")

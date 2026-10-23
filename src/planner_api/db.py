@@ -6,7 +6,7 @@ Workflow tables:
   sku_plan_lines        the engine's result for each SKU in a run (the 28 RULEBOOK columns)
   sku_approvals         Raghav's approval recorded per SKU when a plan is approved
   sku_ai_explanations   Gemini / template explanation per SKU
-  purchase_orders       one PO per supplier for an approved plan, with Zoho sync status
+  purchase_orders       one PO per supplier for an approved plan, with ERPNext sync status
   purchase_order_lines  the SKU lines on each PO
   audit_log             who did what, when, before and after
 
@@ -125,11 +125,11 @@ class PO(Base):
     supplier_region: Mapped[str] = mapped_column(String(128))
     po_date: Mapped[str] = mapped_column(String(10))
     status: Mapped[str] = mapped_column(String(32), default="Generated")
-    zoho_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)      # Zoho PO number
-    zoho_po_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    zoho_status: Mapped[str | None] = mapped_column(String(32), nullable=True)    # draft | issued (as Zoho reports)
-    zoho_error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    zoho_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    erp_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)       # ERPNext PO name, or a manual ref
+    erp_po_name: Mapped[str | None] = mapped_column(String(64), nullable=True)    # set only when created via the API
+    erp_status: Mapped[str | None] = mapped_column(String(32), nullable=True)     # Draft | To Receive and Bill | ...
+    erp_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    erp_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     total_qty: Mapped[int] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     lines: Mapped[list["POLine"]] = relationship(back_populates="po", cascade="all, delete-orphan",
@@ -282,6 +282,7 @@ def init_engine(url: str | None = None) -> None:
         _rename_tables(_engine)
     Base.metadata.create_all(_engine)
     if url.startswith("postgresql"):
+        _rename_columns(_engine)
         _add_columns(_engine)
     _Session = sessionmaker(bind=_engine, expire_on_commit=False)
     _backfill_master_data()
@@ -294,15 +295,24 @@ RENAMES = [
     ("po_lines", "purchase_order_lines"),
 ]
 
+# v2.1: the PO system moved from Zoho to ERPNext (table, old column -> new column).
+COLUMN_RENAMES = [
+    ("purchase_orders", "zoho_ref", "erp_ref"), ("purchase_orders", "zoho_po_id", "erp_po_name"),
+    ("purchase_orders", "zoho_status", "erp_status"), ("purchase_orders", "zoho_error", "erp_error"),
+    ("purchase_orders", "zoho_synced_at", "erp_synced_at"),
+]
+STATUS_RENAMES = [("Entered in Zoho", "Entered in ERPNext"), ("Zoho sync failed", "ERPNext sync failed")]
+
 # Columns added after v1.1; create_all doesn't alter existing tables.
 ADD_COLUMNS = [
     "ALTER TABLE plan_runs ADD COLUMN IF NOT EXISTS source VARCHAR(16) DEFAULT 'upload'",
     "ALTER TABLE plan_runs ADD COLUMN IF NOT EXISTS source_run_id INTEGER",
     "ALTER TABLE plan_runs ADD COLUMN IF NOT EXISTS review_note TEXT",
-    "ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS zoho_po_id VARCHAR(64)",
-    "ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS zoho_status VARCHAR(32)",
-    "ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS zoho_error TEXT",
-    "ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS zoho_synced_at TIMESTAMPTZ",
+    "ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS erp_ref VARCHAR(128)",
+    "ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS erp_po_name VARCHAR(64)",
+    "ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS erp_status VARCHAR(32)",
+    "ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS erp_error TEXT",
+    "ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS erp_synced_at TIMESTAMPTZ",
 ]
 
 
@@ -314,6 +324,18 @@ def _rename_tables(engine) -> None:
         for old, new in RENAMES:
             if old in existing and new not in existing:
                 c.execute(text(f'ALTER TABLE "{old}" RENAME TO "{new}"'))
+
+
+def _rename_columns(engine) -> None:
+    from sqlalchemy import inspect, text
+
+    cols = {c["name"] for c in inspect(engine).get_columns("purchase_orders")}
+    with engine.begin() as c:
+        for table, old, new in COLUMN_RENAMES:
+            if old in cols and new not in cols:
+                c.execute(text(f'ALTER TABLE "{table}" RENAME COLUMN "{old}" TO "{new}"'))
+        for old, new in STATUS_RENAMES:
+            c.execute(text("UPDATE purchase_orders SET status = :new WHERE status = :old"), {"old": old, "new": new})
 
 
 def _add_columns(engine) -> None:

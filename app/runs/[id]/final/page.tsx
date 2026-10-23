@@ -34,7 +34,7 @@ function Final() {
   }
 
   const finalTotal = run.lines.reduce((a, l) => a + (l.decision?.final_qty ?? 0), 0);
-  const inZoho = pos?.filter((p) => p.zoho_po_id).length ?? 0;
+  const inErp = pos?.filter((p) => p.erp_po_name).length ?? 0;
   const refreshPos = () => api<PO[]>(`/runs/${id}/pos`).then(setPos).catch(() => {});
   async function dlAll(fmt: "pdf" | "xlsx" | "csv" | "zip") {
     try { await download(`/runs/${id}/pos/download?format=${fmt}`); refreshPos(); } catch (e) { setErrs(errorMessages(e)); }
@@ -46,7 +46,7 @@ function Final() {
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Reveal><div className="rounded-[22px] bg-ink p-6 text-white"><p className="text-sm text-white/60">Units approved by Raghav</p><CountUp value={finalTotal} className="mt-1 block text-5xl font-semibold tracking-tight" /><p className="mt-2 text-sm text-white/60">{run.review_note ? `“${run.review_note}”` : "Approved as recommended."}</p></div></Reveal>
-        <Reveal delay={0.05}><div className="h-full rounded-[22px] border border-hairline/70 bg-tile p-6"><p className="text-sm text-muted">POs in Zoho Inventory</p><p className="mt-1 text-5xl font-semibold tracking-tight tabular">{pos ? `${inZoho}/${pos.length}` : "—"}</p><p className="mt-2 text-sm text-muted">{pos && inZoho < pos.length ? "Some POs need attention below." : "Created automatically on approval."}</p></div></Reveal>
+        <Reveal delay={0.05}><div className="h-full rounded-[22px] border border-hairline/70 bg-tile p-6"><p className="text-sm text-muted">POs in ERPNext</p><p className="mt-1 text-5xl font-semibold tracking-tight tabular">{pos ? `${inErp}/${pos.length}` : "—"}</p><p className="mt-2 text-sm text-muted">{pos && inErp < pos.length ? "Some POs need attention below." : "Created automatically on approval."}</p></div></Reveal>
         <Reveal delay={0.1}><div className="h-full rounded-[22px] border border-hairline/70 bg-tile p-6"><p className="text-sm text-muted">Approved by</p><p className="mt-1 text-2xl font-semibold tracking-tight">{run.finalised_by}</p><p className="mt-2 text-sm text-muted">{run.finalised_at_local}</p></div></Reveal>
       </div>
 
@@ -55,12 +55,12 @@ function Final() {
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <h2 id="po-title" className="section-title">Purchase orders.</h2>
-              <p className="mt-2 text-muted">One PO per supplier, created in Zoho Inventory when Raghav approved. Rates aren&apos;t in the data, so set them in Zoho.</p>
+              <p className="mt-2 text-muted">One PO per supplier, created in ERPNext when Raghav approved. Rates aren&apos;t in the data, so set them in ERPNext.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="secondary" onClick={() => dlAll("pdf")}>All PDF</Button>
               <Button size="sm" variant="secondary" onClick={() => dlAll("xlsx")}>All Excel</Button>
-              <Button size="sm" variant="secondary" onClick={() => dlAll("csv")}>All Zoho CSV</Button>
+              <Button size="sm" variant="secondary" onClick={() => dlAll("csv")}>All CSV</Button>
               <Button size="sm" onClick={() => dlAll("zip")}>All as ZIP</Button>
             </div>
           </div>
@@ -74,7 +74,7 @@ function Final() {
               ))}
             </div>
           )}
-          <p className="mt-4 text-sm text-muted">Prices are not in the source data, so price columns print as “—”. Enter rates in Zoho.</p>
+          <p className="mt-4 text-sm text-muted">Prices are not in the source data, so price columns print as “—”. Set rates in ERPNext.</p>
         </motion.div>
       </section>
 

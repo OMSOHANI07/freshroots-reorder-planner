@@ -45,10 +45,11 @@ function describe(a: AuditEntry) {
     case "run.create": return `Ran the plan on ${after.source === "sap_latest" ? `latest SAP data (run #${String(after.source_run_id)})` : "new SAP upload"} → ${String(after.status)}, run date ${String(after.run_date)}${after.run_date_overridden ? " (set manually)" : ""}`;
     case "run.approve": return `Approved the plan · ${n0(after.total_units as number)} units · POs ${(after.pos as string[]).join(", ") || "none"}${after.note ? ` · “${String(after.note)}”` : ""}`;
     case "run.reject": return `Rejected the plan · “${String(after.note)}”`;
-    case "po.zoho_created": return `${a.entity?.replace("po:", "")} created in Zoho as ${String(after.zoho_ref)} (${String(after.zoho_status ?? "draft")})`;
-    case "po.zoho_failed": return `${a.entity?.replace("po:", "")} Zoho sync failed: ${String(after.error)}`;
+    case "po.erp_created": return `${a.entity?.replace("po:", "")} created in ERPNext as ${String(after.erp_po_name)} (${String(after.erp_status ?? "Draft")})`;
+    case "po.erp_failed": return `${a.entity?.replace("po:", "")} ERPNext sync failed: ${String(after.error)}`;
+    case "po.entered_manually": return `${a.entity?.replace("po:", "")} entered by hand · ref ${String(after.erp_ref)}`;
     case "po.download": return `${a.entity?.replace("po:", "")} downloaded (${String(after.format)})`;
-    case "po.entered_in_zoho": return `${a.entity?.replace("po:", "")} entered in Zoho · ref ${String(after.zoho_ref)}`;
+    case "po.entered_in_zoho": return `${a.entity?.replace("po:", "")} entered by hand · ref ${String(after.zoho_ref ?? after.erp_ref)}`;
     default: return a.action;
   }
 }

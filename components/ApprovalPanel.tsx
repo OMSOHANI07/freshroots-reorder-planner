@@ -8,7 +8,7 @@ import { api, errorMessages } from "@/lib/api";
 import { FLAG_LABEL, flagsOf, n0 } from "@/lib/format";
 import type { Line, PO, RunDetail } from "@/lib/types";
 
-/** Raghav's only job: approve or reject the whole plan. Approval creates the POs in Zoho. */
+/** Raghav's only job: approve or reject the whole plan. Approval creates the POs in ERPNext. */
 export function ApprovalPanel({ run, onOpen }: { run: RunDetail; onOpen: (l: Line) => void }) {
   const router = useRouter();
   const [mode, setMode] = useState<"approve" | "reject" | null>(null);
@@ -27,7 +27,7 @@ export function ApprovalPanel({ run, onOpen }: { run: RunDetail; onOpen: (l: Lin
     try {
       if (mode === "approve") {
         const r = await api<{ pos: PO[] }>(`/runs/${run.id}/approve`, { method: "POST", body: JSON.stringify({ note: note.trim() || null }) });
-        setDone({ ok: r.pos.filter((p) => p.zoho_po_id).length, failed: r.pos.filter((p) => !p.zoho_po_id).length });
+        setDone({ ok: r.pos.filter((p) => p.erp_po_name).length, failed: r.pos.filter((p) => !p.erp_po_name).length });
         setTimeout(() => router.push(`/runs/${run.id}/final`), 1900);
       } else {
         await api(`/runs/${run.id}/reject`, { method: "POST", body: JSON.stringify({ note: note.trim() }) });
@@ -46,7 +46,7 @@ export function ApprovalPanel({ run, onOpen }: { run: RunDetail; onOpen: (l: Lin
       <h2 id="approval-title" className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">Approve this plan?</h2>
       <p className="mt-3 max-w-2xl text-white/75">
         Approving orders {n0(run.summary!.total_units_now)} units across {orderLines.length} SKUs and raises {suppliers.size} purchase
-        order{suppliers.size === 1 ? "" : "s"}, one per supplier (sent to Zoho Inventory when it&apos;s connected). Rejecting orders nothing.
+        order{suppliers.size === 1 ? "" : "s"}, one per supplier (sent to ERPNext when it&apos;s connected). Rejecting orders nothing.
       </p>
       {flagged.length > 0 && (
         <div className="mt-6">
@@ -85,7 +85,7 @@ export function ApprovalPanel({ run, onOpen }: { run: RunDetail; onOpen: (l: Lin
               </div>
               <div className="flex gap-2">
                 <Button disabled={busy} variant={mode === "reject" ? "danger" : "primary"} onClick={submit}>
-                  {busy ? (mode === "approve" ? "Creating POs in Zoho…" : "Rejecting…") : mode === "approve" ? "Confirm approval" : "Confirm rejection"}
+                  {busy ? (mode === "approve" ? "Raising purchase orders…" : "Rejecting…") : mode === "approve" ? "Confirm approval" : "Confirm rejection"}
                 </Button>
                 <Button variant="ghost" className="text-white" onClick={() => { setMode(null); setErrs([]); }}>Cancel</Button>
               </div>
@@ -105,7 +105,7 @@ export function ApprovalPanel({ run, onOpen }: { run: RunDetail; onOpen: (l: Lin
               </motion.svg>
               <p className="mt-6 text-3xl font-semibold tracking-tight">Plan approved.</p>
               <p className="mt-2 text-muted">
-                {done.failed === 0 ? `${done.ok} PO${done.ok === 1 ? "" : "s"} created in Zoho Inventory.` : done.ok === 0 ? "Purchase orders are ready for procurement." : `${done.ok} created in Zoho · ${done.failed} need attention.`}
+                {done.failed === 0 ? `${done.ok} PO${done.ok === 1 ? "" : "s"} created in ERPNext.` : done.ok === 0 ? "Purchase orders are ready for procurement." : `${done.ok} created in ERPNext · ${done.failed} need attention.`}
               </p>
             </div>
           </motion.div>

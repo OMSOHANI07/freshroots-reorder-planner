@@ -10,7 +10,7 @@ const LANE: Record<Lane, { label: string; dot: string; chip: string }> = {
   analyst: { label: "Analyst", dot: "bg-accent", chip: "bg-accent/10 text-[#0058b0]" },
   planner: { label: "Planner (automatic)", dot: "bg-grey", chip: "bg-grey-soft text-grey" },
   raghav: { label: "Raghav", dot: "bg-ink", chip: "bg-ink text-white" },
-  procurement: { label: "Procurement · Zoho", dot: "bg-green", chip: "bg-green-soft text-green" },
+  procurement: { label: "Procurement · ERPNext", dot: "bg-green", chip: "bg-green-soft text-green" },
 };
 
 interface Step { lane: Lane; title: string; body: string; decision?: { question: string; no: string } }
@@ -23,7 +23,7 @@ const FLOW: Step[] = [
   { lane: "raghav", title: "Review the plan", body: "Headline numbers, the flagged SKUs called out, every SKU one tap away.",
     decision: { question: "Approve?", no: "Rejected with a note. Nothing is ordered. The Analyst runs a new plan." } },
   { lane: "planner", title: "Raise purchase orders", body: "One PO per supplier, with the approved quantities. Paused and healthy SKUs are left out." },
-  { lane: "procurement", title: "Orders go out", body: "POs are created in Zoho Inventory (once connected). Procurement downloads PDF, Excel or CSV copies." },
+  { lane: "procurement", title: "Orders go out", body: "POs are created in ERPNext as Drafts (once connected). Procurement adds rates and submits them; PDF, Excel and CSV copies are always there." },
 ];
 
 const ROLES: { key: Lane; name: string; steps: string[] }[] = [
@@ -45,9 +45,9 @@ const ROLES: { key: Lane; name: string; steps: string[] }[] = [
   { key: "procurement", name: "Procurement", steps: [
     "Sign in and choose Procurement. Home opens the latest approved plan.",
     "Each supplier has one purchase order tile with its lines and total.",
-    "If Zoho is connected, the tile shows the Zoho PO number. If a sync failed, press Retry Zoho after fixing the reason shown.",
-    "Use Download for a PDF, Excel or Zoho CSV of one PO, or All as ZIP for everything.",
-    "Set prices in Zoho: the source data has no unit costs.",
+    "If ERPNext is connected, the tile shows the ERPNext PO number and an Open in ERPNext link. If a sync failed, press Retry ERPNext after fixing the reason shown.",
+    "Use Download for a PDF, Excel or CSV of one PO, or All as ZIP for everything.",
+    "In ERPNext, add rates and the real Required By date, then submit the PO: the source data has no prices or lead times.",
   ] },
 ];
 
@@ -70,11 +70,11 @@ const FLAGS: [string, string][] = [
 
 const FAQ: [string, string][] = [
   ["Who decides how much to order?", "The rules engine, using Raghav's thresholds in config.yaml. Raghav approves or rejects the whole plan. AI only explains."],
-  ["Why are there no prices on the POs?", "The SAP files have no unit costs, and the planner never guesses. Add rates in Zoho."],
+  ["Why are there no prices on the POs?", "The SAP files have no unit costs, and the planner never guesses. Add rates in ERPNext."],
   ["What are the cover windows?", "Long-life SKUs: 6 to 14 weeks of stock. Perishable SKUs: 3 to 4 weeks."],
   ["When is a month a festival month?", "Only when festival_calendar marks it. Today: March, October and November. Expected demand goes up 25%."],
   ["Can anyone change a rule or threshold?", "Only Raghav, with sign-off from Deepa Nair (Head of Operations). Procurement can't."],
-  ["What happens if Zoho is down?", "The plan is still approved and the POs are kept. Each PO shows why it didn't reach Zoho and can be retried."],
+  ["What happens if ERPNext is down?", "The plan is still approved and the POs are kept. Each PO shows why it didn't reach ERPNext and can be retried."],
 ];
 
 export default function Guide() {

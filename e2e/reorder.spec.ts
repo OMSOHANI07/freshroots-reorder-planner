@@ -18,7 +18,7 @@ async function signIn(page: Page, who: RegExp) {
   await page.getByRole("button", { name: who }).click();
 }
 
-test("analyst uploads → Raghav approves → POs to Zoho + downloads", async ({ page }, info) => {
+test("analyst uploads → Raghav approves → POs to ERPNext + downloads", async ({ page }, info) => {
   await signIn(page, /^Data and runs Analyst/);
   await expect(page).toHaveURL(/\/runs\/new/);
   await page.getByRole("radio", { name: /Upload new files/ }).click();
@@ -48,13 +48,13 @@ test("analyst uploads → Raghav approves → POs to Zoho + downloads", async ({
   await expect(page.getByRole("heading", { name: "Purchase orders." })).toBeVisible();
   const tiles = page.locator("article[aria-labelledby^='po-']");
   await expect(tiles).toHaveCount(3);
-  // each PO is either in Zoho or shows why it isn't (no credentials locally)
+  // each PO is either in ERPNext or shows why it isn't (no credentials locally)
   for (const t of await tiles.all()) {
-    await expect(t.getByText(/In Zoho Inventory as|Zoho not connected|not found in Zoho/)).toBeVisible();
+    await expect(t.getByText(/In ERPNext as|ERPNext not connected|not found in ERPNext/)).toBeVisible();
   }
 
   const dir = info.outputPath("downloads");
-  for (const label of ["All PDF", "All Excel", "All Zoho CSV", "All as ZIP"]) {
+  for (const label of ["All PDF", "All Excel", "All CSV", "All as ZIP"]) {
     const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: label }).click()]);
     await dl.saveAs(path.join(dir, dl.suggestedFilename()));
   }

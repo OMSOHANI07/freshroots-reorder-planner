@@ -9,7 +9,7 @@ const STEPS = [
   { title: "Predict", tag: "Rules engine", comps: "5", body: "A deterministic engine, not a model, works out cover, trend and festival uplift, then applies the decision table. Same inputs, same plan, byte for byte.", stat: "Deterministic" },
   { title: "Reasoning", tag: "Gemini", comps: "6", body: "Gemini explains each SKU in plain language. It never sets a number. Any figure it writes that the engine didn't compute is thrown out.", stat: "Explains only" },
   { title: "Raghav approves", tag: "Human in the loop", comps: "7 · 8 · 9", body: "Raghav sees the plan with every flagged SKU called out, then does one thing: approve or reject. Nothing is ordered without that approval.", stat: "Expert wins" },
-  { title: "PO", tag: "Zoho", comps: "10", body: "The moment Raghav approves, one purchase order per supplier is created in Zoho Inventory. PDF and Excel copies stay available for procurement.", stat: "Straight to Zoho" },
+  { title: "PO", tag: "ERPNext", comps: "10", body: "The moment Raghav approves, one purchase order per supplier is created in ERPNext. PDF and Excel copies stay available for procurement.", stat: "Straight to ERPNext" },
 ];
 
 export function ScrollStory() {

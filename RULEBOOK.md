@@ -1,6 +1,6 @@
 # Freshroots Reorder Plan — Rule Book
 
-**Version:** 2.0 (23 Oct 2026)
+**Version:** 2.1 (23 Oct 2026)
 **Status:** In force for the app. **Pending sign-off by Raghav Kulkarni and Deepa Nair** (Section 16).
 **Purpose:** Single source of truth for the Freshroots reorder plan: the calculation rules, who does what, and how orders are raised.
 **Audience:** The demand planning team (Raghav), the analyst, procurement, and whoever maintains the code.
@@ -10,7 +10,7 @@
 - **[SPEC]** *Freshroots Reorder Plan Rule Sheet*, the technical specification.
 - The workflow decisions of 22 Oct 2026 (Section 19), which this version folds into the body.
 
-**What changed in 2.0:** nothing in the calculations (Sections 5–14 and the golden test are unchanged). The workflow, roles, AI use and Zoho purchase orders, previously spread across change-log amendments, are now written out in Section 19, and the contradictions those amendments left in Sections 0, 1, 2, 12 and 16 are removed.
+**What changed in 2.0 and 2.1:** nothing in the calculations (Sections 5–14 and the golden test are unchanged). 2.0 wrote the workflow, roles, AI use and purchase orders into the body (Section 19). 2.1 moves purchase orders from Zoho Inventory to ERPNext.
 
 ---
 
@@ -20,8 +20,8 @@
 2. **Precedence: the Expert Rule Book [EXP] supersedes the Rule Sheet [SPEC].** Where the two disagree, Raghav's rule is final. Every known conflict is resolved in Section 2. Rules marked **[EXP]** or **[RESOLVED→EXP]** must never be changed to match a [SPEC] rule.
 3. **If you find a conflict or gap that this file does not resolve, stop.** Do not choose an interpretation silently. Report it in the run log and to the product owner, then wait for a human decision.
 4. **Never invent data.** Use only the input files in Section 5 and the parameters in Section 6. If a value is missing, apply the validation rule for it (Section 7); never estimate or fill it in. No prices, lead times or stock on order.
-5. **The code recommends; Raghav decides.** The rules engine decides every recommended quantity. No purchase order exists, and nothing is sent to Zoho, until Raghav approves the plan (Section 19). AI may explain results but never sets or changes a number.
-6. **External systems:** only the Gemini API (explanations) and the Zoho Inventory API (purchase orders after approval). Nothing else.
+5. **The code recommends; Raghav decides.** The rules engine decides every recommended quantity. No purchase order exists, and nothing is sent to ERPNext, until Raghav approves the plan (Section 19). AI may explain results but never sets or changes a number.
+6. **External systems:** only the Gemini API (explanations) and the ERPNext API (purchase orders after approval). Nothing else.
 7. **All thresholds live in `config.yaml`** (Section 6). No threshold may be hard-coded in logic.
 8. **Do the arithmetic in code.** Compare unrounded values. Round only when writing output (Section 12).
 9. **The golden test (Section 14) must pass** before any output is considered valid. If it fails, the implementation is wrong. Do not edit the expected values to make it pass.
@@ -66,7 +66,7 @@
 | C7 | One-off market events | Not specified | Escalate to Raghav; can't be seen in sales history | **[RESOLVED→EXP]** Optional manual file `judgment_overrides.csv` (Section 5.6) routes listed SKUs to the judgment zone. |
 | C8 | Who may change rules | Raghav, with Deepa's sign-off | Raghav owns the rules; changes need Raghav's agreement and Deepa's sign-off; procurement can't change them | Same in both. **[EXP]** wording is used. |
 
-| C9 | Placing orders | The code must never place an order or call an external system | The workflow decision of 22 Oct 2026: approval should create purchase orders in Zoho | **[WF]** Orders are created only after Raghav approves the plan, and only in Zoho Inventory (Section 19.4). Pending sign-off. |
+| C9 | Placing orders | The code must never place an order or call an external system | The workflow decision of 22 Oct 2026: approval should create purchase orders in the purchasing system | **[WF]** Orders are created only after Raghav approves the plan, and only in ERPNext (Section 19.4). Pending sign-off. |
 
 No other conflicts exist between the two source documents. Where only [SPEC] covers a topic (input checks, output checks, rounding, file formats), the [SPEC] rule applies.
 
@@ -457,7 +457,7 @@ config.yaml
 RULEBOOK.md                 # this file
 src/reorder/                # the rules engine (Sections 5–13)
   io.py  validate.py  calculate.py  flags.py  output.py  checks.py  engine.py  cli.py
-src/planner_api/            # web API: runs, approval, POs, Zoho, AI explanations (Section 19)
+src/planner_api/            # web API: runs, approval, POs, ERPNext, AI explanations (Section 19)
 app/  components/  lib/     # website
 tests/                      # golden test, edge cases, API, AI guardrail
 e2e/                        # end-to-end browser tests
@@ -483,7 +483,7 @@ e2e/                        # end-to-end browser tests
 | Running a plan (latest SAP data or a new upload) | Analyst |
 | Entries in judgment_overrides (J2) | Entered by the Analyst on Raghav's behalf; Raghav owns them |
 | Approving or rejecting a plan | Raghav Kulkarni only |
-| Entering rates and issuing POs in Zoho | Procurement |
+| Entering rates and submitting POs in ERPNext | Procurement |
 
 Procurement and the Analyst apply rules but do not change them. After any approved change:
 
@@ -512,7 +512,7 @@ Implement the default shown and keep it configurable. **Don't resolve these your
 | Q9 | With whole-plan approval, how should Raghav adjust a single SKU (for example, topping up an R1 shortfall)? | Not possible: reject the plan with a note and re-run |
 | Q10 | Is the 40% kill criterion measured on rejected plans? | Yes: rejected plans ÷ decided plans |
 
-**Data gaps.** There are no supplier lead times, units on order (Zoho Inventory), unit costs, or distributor-level sales. When any of these is added, the logic that uses it must be specified in this file first and approved under Section 16.
+**Data gaps.** There are no supplier lead times, units on order, unit costs, or distributor-level sales. When any of these is added, the logic that uses it must be specified in this file first and approved under Section 16.
 
 ---
 
@@ -524,6 +524,7 @@ Implement the default shown and keep it configurable. **Don't resolve these your
 | 1.1 | 22 Oct 2026 | Gemini allowed to explain results only (with a number guardrail and template fallback); PO files only after approval; per-SKU APPROVE / CHANGE / REJECT / HOLD; run date may be set for replays. | Product owner; pending Raghav and Deepa |
 | 1.2 | 22 Oct 2026 | Analyst runs plans; Raghav approves or rejects the whole plan; approval creates POs in Zoho Inventory; kill criterion = plan rejection rate. Superseded the per-SKU decisions of 1.1. | Product owner; pending Raghav and Deepa |
 | 2.0 | 23 Oct 2026 | Consolidation: the 1.1 and 1.2 workflow written into the body (Sections 0, 1, 2, 12, 16, new Section 19); contradictions removed; data storage named. **No change to any calculation, threshold or the golden test.** | Product owner; **pending Raghav Kulkarni and Deepa Nair** |
+| 2.1 | 23 Oct 2026 | Purchase orders go to **ERPNext** instead of Zoho Inventory (the Zoho account could not create an organization). Same rules: only after approval, approved quantities only, no rates, idempotent retries. "Required By" is set to the PO date because lead times are not in the data. **No change to any calculation or the golden test.** | Product owner; **pending Raghav Kulkarni and Deepa Nair** |
 
 ---
 
@@ -533,9 +534,9 @@ Implement the default shown and keep it configurable. **Don't resolve these your
 
 | Role | Can do | Cannot do |
 |---|---|---|
-| Analyst | Run a plan on the latest SAP data or a new upload; add J2 overrides; set the run date for replays; retry a failed Zoho sync | Approve or reject; change rules |
+| Analyst | Run a plan on the latest SAP data or a new upload; add J2 overrides; set the run date for replays; retry a failed ERPNext sync | Approve or reject; change rules |
 | Raghav Kulkarni | Approve or reject a plan | Run plans or edit data in the app |
-| Procurement | View approved plans and POs; download PO files; retry a failed Zoho sync; record a PO entered by hand if Zoho is unavailable | Approve, reject, or change rules |
+| Procurement | View approved plans and POs; download PO files; retry a failed ERPNext sync; record a PO entered by hand if ERPNext is unavailable | Approve, reject, or change rules |
 
 Every action is written to the audit log with who, when, what, and the before and after values.
 
@@ -559,9 +560,9 @@ Every action is written to the audit log with who, when, what, and the before an
 
 1. On approval, the app raises **one PO per supplier** (Distributor_ID), containing only lines with a final quantity above 0. Paused, healthy and judgment-zone SKUs never appear.
 2. PO number: `FR-PO-YYYYMMDD-<Distributor_ID>-<seq>`, dated in Asia/Kolkata.
-3. **Zoho Inventory:** when the connection is configured, each PO is created in Zoho via its API: vendor matched by exact `Distributor_Name`, items by exact SKU, the approved quantities, **no rates**. POs are created as Draft unless `ZOHO_MARK_ISSUED=true`. A failed PO keeps its reason and can be retried; retries never duplicate (the PO number is unique in Zoho).
-4. PDF, Excel and Zoho-import CSV copies are always available, with price columns shown as "—" and a note.
-5. If Zoho is not connected, POs are kept with the reason and procurement can record a Zoho reference entered by hand.
+3. **ERPNext:** when the connection is configured, each PO is created in ERPNext via its REST API: supplier matched by exact `Distributor_Name`, items by exact item code = `SKU_ID`, the approved quantities, **no rates**. The Freshroots PO number is the ERPNext PO title, so a retry never creates a duplicate. "Required By" is the PO date, because lead times are not in the data (Q6); procurement sets the real date. POs are created as **Draft** unless `ERPNEXT_SUBMIT=true`. A failed PO keeps its reason and can be retried.
+4. PDF, Excel and CSV copies are always available, with price columns shown as "—" and a note.
+5. If ERPNext is not connected, POs are kept with the reason and procurement can record an ERPNext reference entered by hand.
 
 ### 19.5 AI explanations
 
@@ -581,5 +582,5 @@ Neon Postgres, database `freshroots`; branch `production` for the live app, `dev
 | sku_plan_lines | The engine result per SKU (the Section 12.2 columns) |
 | sku_approvals | The APPROVE line per SKU of an approved plan |
 | sku_ai_explanations | The explanation per SKU and its source |
-| purchase_orders, purchase_order_lines | POs per supplier and their lines, with Zoho status |
+| purchase_orders, purchase_order_lines | POs per supplier and their lines, with ERPNext status |
 | audit_log | Every action: who, when, what, before and after |

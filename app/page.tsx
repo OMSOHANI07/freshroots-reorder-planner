@@ -118,7 +118,7 @@ export default function Home() {
             <Tile className="flex h-full flex-col bg-tile-alt p-8">
               <p className="eyebrow text-muted">Procurement</p>
               <h3 className="mt-2 text-2xl font-semibold tracking-tight">Gets the orders.</h3>
-              <p className="mt-3 text-muted">One purchase order per supplier, ready for Zoho.</p>
+              <p className="mt-3 text-muted">One purchase order per supplier, straight into ERPNext.</p>
             </Tile>
           </Reveal>
         </Container>

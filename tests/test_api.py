@@ -1,4 +1,4 @@
-"""API, whole-plan approval, PO and Zoho sync tests. Throwaway SQLite DB and a mock Zoho; never Neon or real Zoho."""
+"""API, whole-plan approval, PO and ERPNext sync tests. Throwaway SQLite DB and a mock ERPNext; never Neon or a real ERP."""
 import csv
 import io
 import json
@@ -20,60 +20,55 @@ RAGHAV = {"X-Role": "raghav"}
 PROC = {"X-Role": "procurement"}
 EXPECTED = {"DIST001": {"SKU001": 750, "SKU013": 120}, "DIST002": {"SKU003": 300, "SKU004": 150},
             "DIST004": {"SKU011": 500}}
-VENDORS = {"NutriFlow Distributors": "V1", "GrainPath Logistics": "V2", "Meridian Trade Co.": "V4"}
+SUPPLIERS = ["NutriFlow Distributors", "GrainPath Logistics", "Meridian Trade Co."]
 
 
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
     db.init_engine(f"sqlite:///{tmp_path / 'test.db'}")
     monkeypatch.setattr(get_settings(), "gemini_api_key", "")  # template explanations, no network
-    for k in ("ZOHO_SYNC_ENABLED", "ZOHO_CLIENT_ID", "ZOHO_CLIENT_SECRET", "ZOHO_REFRESH_TOKEN", "ZOHO_ORGANIZATION_ID"):
+    for k in ("ERP_SYNC_ENABLED", "ERPNEXT_URL", "ERPNEXT_API_KEY", "ERPNEXT_API_SECRET", "ERPNEXT_COMPANY",
+              "ERPNEXT_WAREHOUSE", "ERPNEXT_SUBMIT"):
         monkeypatch.delenv(k, raising=False)
     return TestClient(app)
 
 
-class FakeZoho:
-    """Minimal Zoho Inventory: OAuth refresh, contacts, items, purchase orders."""
+class FakeERPNext:
+    """Minimal ERPNext REST API: Supplier, Item and Purchase Order resources."""
 
-    def __init__(self, fail_vendor=None):
-        self.created, self.fail_vendor, self.tokens = [], fail_vendor, 0
+    def __init__(self, missing_supplier=None):
+        self.created, self.missing_supplier = [], missing_supplier
 
     def __call__(self, req: httpx.Request) -> httpx.Response:
-        url = req.url
-        if url.path == "/oauth/v2/token":
-            self.tokens += 1
-            return httpx.Response(200, json={"access_token": "tok", "expires_in": 3600})
-        assert req.headers["Authorization"] == "Zoho-oauthtoken tok"
-        assert url.params["organization_id"] == "org1"
-        if url.path.endswith("/contacts"):
-            name = url.params["contact_name"]
-            if name == self.fail_vendor or name not in VENDORS:
-                return httpx.Response(200, json={"code": 0, "contacts": []})
-            return httpx.Response(200, json={"code": 0, "contacts": [
-                {"contact_id": VENDORS[name], "contact_name": name, "contact_type": "vendor"}]})
-        if url.path.endswith("/items"):
-            sku = url.params["sku"]
-            return httpx.Response(200, json={"code": 0, "items": [{"item_id": f"I-{sku}", "sku": sku}]})
-        if url.path.endswith("/purchaseorders") and req.method == "GET":
-            found = [c for c in self.created if c["purchaseorder_number"] == url.params["search_text"]]
-            return httpx.Response(200, json={"code": 0, "purchaseorders": [
-                {"purchaseorder_id": f"Z{c['purchaseorder_number']}", "purchaseorder_number": c["purchaseorder_number"],
-                 "status": "draft"} for c in found]})
-        if url.path.endswith("/purchaseorders") and req.method == "POST":
-            assert url.params["ignore_auto_number_generation"] == "true"
-            body = json.loads(req.content)
-            self.created.append(body)
-            return httpx.Response(201, json={"code": 0, "purchase_order": {
-                "purchaseorder_id": f"Z{body['purchaseorder_number']}", "purchaseorder_number": body["purchaseorder_number"],
-                "status": "draft"}})
-        return httpx.Response(404, json={"code": 1, "message": "unexpected"})
+        assert req.headers["Authorization"] == "token key1:secret1"
+        path = req.url.path
+        if req.method == "GET":
+            filters = json.loads(req.url.params["filters"])
+            if path.endswith("/Supplier"):
+                name = filters[0][2]
+                ok = name in SUPPLIERS and name != self.missing_supplier
+                return httpx.Response(200, json={"data": [{"name": name, "supplier_name": name, "disabled": 0}] if ok else []})
+            if path.endswith("/Item"):
+                code = filters[0][2]
+                return httpx.Response(200, json={"data": [{"name": code, "item_code": code, "disabled": 0}]})
+            if path.endswith("/Purchase Order"):
+                title = filters[0][2]
+                hits = [{"name": c["_name"], "title": c["title"], "status": "Draft", "docstatus": 0}
+                        for c in self.created if c["title"] == title]
+                return httpx.Response(200, json={"data": hits})
+        if req.method == "POST" and path.endswith("/Purchase Order"):
+            doc = json.loads(req.content)
+            doc["_name"] = f"PUR-ORD-2026-{len(self.created) + 1:05d}"
+            self.created.append(doc)
+            return httpx.Response(200, json={"data": {"name": doc["_name"], "status": "Draft", "docstatus": 0}})
+        return httpx.Response(404, json={"exc_type": "DoesNotExistError"})
 
 
-def connect_zoho(monkeypatch, fake):
-    for k, v in {"ZOHO_SYNC_ENABLED": "true", "ZOHO_DC": "in", "ZOHO_CLIENT_ID": "c", "ZOHO_CLIENT_SECRET": "s",
-                 "ZOHO_REFRESH_TOKEN": "r", "ZOHO_ORGANIZATION_ID": "org1"}.items():
+def connect_erp(monkeypatch, fake):
+    for k, v in {"ERP_SYNC_ENABLED": "true", "ERPNEXT_URL": "https://freshroots.example.erpnext.com",
+                 "ERPNEXT_API_KEY": "key1", "ERPNEXT_API_SECRET": "secret1", "ERPNEXT_COMPANY": "Freshroots"}.items():
         monkeypatch.setenv(k, v)
-    monkeypatch.setattr(main, "_zoho_transport", httpx.MockTransport(fake))
+    monkeypatch.setattr(main, "_erp_transport", httpx.MockTransport(fake))
 
 
 def upload(client, oct_dir, run_date="2026-10-19", headers=ANALYST, drop=None):
@@ -121,52 +116,62 @@ def test_reject_needs_note_and_makes_no_pos(client, oct_dir):
     assert client.post(f"/api/runs/{run_id}/approve", headers=RAGHAV).status_code == 409
 
 
-def test_approve_without_zoho_keeps_pos_and_reason(client, oct_dir):
+def test_approve_without_erp_keeps_pos_and_reason(client, oct_dir):
     run_id = upload(client, oct_dir).json()["run_id"]
     pos = client.post(f"/api/runs/{run_id}/approve", headers=RAGHAV).json()["pos"]
     assert {p["distributor_id"]: {l["sku_id"]: l["quantity"] for l in p["lines"]} for p in pos} == EXPECTED
-    assert all(p["status"] == "Generated" and "Zoho not connected" in p["zoho_error"] for p in pos)
+    assert all(p["status"] == "Generated" and "ERPNext not connected" in p["erp_error"] for p in pos)
 
 
-def test_approve_creates_pos_in_zoho(client, oct_dir, monkeypatch):
-    fake = FakeZoho()
-    connect_zoho(monkeypatch, fake)
+def test_approve_creates_pos_in_erpnext(client, oct_dir, monkeypatch):
+    fake = FakeERPNext()
+    connect_erp(monkeypatch, fake)
     run_id = upload(client, oct_dir).json()["run_id"]
-    assert client.post(f"/api/runs/{run_id}/explain", headers=ANALYST).status_code == 200
     r = client.post(f"/api/runs/{run_id}/approve", headers=RAGHAV, json={"note": "Looks right"})
     assert r.status_code == 200, r.text
     pos = r.json()["pos"]
-    assert all(p["status"] == "Entered in Zoho" and p["zoho_po_id"] and p["zoho_error"] is None for p in pos)
-    # Zoho received exactly the approved quantities, one PO per supplier, mapped vendors + items, no prices
-    got = {c["vendor_id"]: {l["item_id"]: l["quantity"] for l in c["line_items"]} for c in fake.created}
-    assert got == {VENDORS["NutriFlow Distributors"]: {"I-SKU001": 750, "I-SKU013": 120},
-                   VENDORS["GrainPath Logistics"]: {"I-SKU003": 300, "I-SKU004": 150},
-                   VENDORS["Meridian Trade Co."]: {"I-SKU011": 500}}
-    assert all("rate" not in l and "purchase_rate" not in l for c in fake.created for l in c["line_items"])
-    assert {c["purchaseorder_number"] for c in fake.created} == {p["po_number"] for p in pos}
-    assert fake.tokens == 1  # token reused across POs
+    assert all(p["status"] == "Entered in ERPNext" and p["erp_po_name"].startswith("PUR-ORD-") and p["erp_error"] is None
+               for p in pos)
+    assert all(p["erp_url"] == f"https://freshroots.example.erpnext.com/app/purchase-order/{p['erp_po_name']}" for p in pos)
+    # ERPNext received exactly the approved quantities, one PO per supplier, no rates, our PO number as title
+    got = {c["supplier"]: {l["item_code"]: l["qty"] for l in c["items"]} for c in fake.created}
+    assert got == {"NutriFlow Distributors": {"SKU001": 750, "SKU013": 120},
+                   "GrainPath Logistics": {"SKU003": 300, "SKU004": 150},
+                   "Meridian Trade Co.": {"SKU011": 500}}
+    assert all("rate" not in l for c in fake.created for l in c["items"])
+    assert {c["title"] for c in fake.created} == {p["po_number"] for p in pos}
+    assert all(c["company"] == "Freshroots" and c["schedule_date"] == c["transaction_date"] and "docstatus" not in c
+               for c in fake.created)
     audit = client.get(f"/api/audit?run_id={run_id}", headers=PROC).json()
-    assert sum(a["action"] == "po.zoho_created" for a in audit) == 3
-    # manual "entered" is blocked once Zoho has it
+    assert sum(a["action"] == "po.erp_created" for a in audit) == 3
+    # manual "entered" is blocked once ERPNext has it
     assert client.patch(f"/api/pos/{pos[0]['id']}", headers=PROC,
-                        json={"status": "Entered in Zoho", "zoho_ref": "x"}).status_code == 409
+                        json={"status": "Entered in ERPNext", "erp_ref": "x"}).status_code == 409
 
 
-def test_zoho_failure_then_retry(client, oct_dir, monkeypatch):
-    fake = FakeZoho(fail_vendor="GrainPath Logistics")
-    connect_zoho(monkeypatch, fake)
+def test_erp_failure_then_retry(client, oct_dir, monkeypatch):
+    fake = FakeERPNext(missing_supplier="GrainPath Logistics")
+    connect_erp(monkeypatch, fake)
     run_id = upload(client, oct_dir).json()["run_id"]
     pos = {p["distributor_id"]: p for p in client.post(f"/api/runs/{run_id}/approve", headers=RAGHAV).json()["pos"]}
-    assert pos["DIST001"]["status"] == "Entered in Zoho"
-    assert pos["DIST002"]["status"] == "Zoho sync failed"
-    assert "Vendor 'GrainPath Logistics' not found" in pos["DIST002"]["zoho_error"]
-    assert client.post(f"/api/pos/{pos['DIST002']['id']}/zoho-sync", headers=RAGHAV).status_code == 403
-    fake.fail_vendor = None  # vendor created in Zoho
-    again = client.post(f"/api/pos/{pos['DIST002']['id']}/zoho-sync", headers=PROC).json()
-    assert again["status"] == "Entered in Zoho"
-    # retry of an already-synced PO doesn't create a duplicate
-    client.post(f"/api/pos/{pos['DIST001']['id']}/zoho-sync", headers=PROC)
+    assert pos["DIST001"]["status"] == "Entered in ERPNext"
+    assert pos["DIST002"]["status"] == "ERPNext sync failed"
+    assert "Supplier 'GrainPath Logistics' not found" in pos["DIST002"]["erp_error"]
+    assert client.post(f"/api/pos/{pos['DIST002']['id']}/erp-sync", headers=RAGHAV).status_code == 403
+    fake.missing_supplier = None  # supplier created in ERPNext
+    again = client.post(f"/api/pos/{pos['DIST002']['id']}/erp-sync", headers=PROC).json()
+    assert again["status"] == "Entered in ERPNext"
+    # a retry of an already-synced PO doesn't create a duplicate
+    client.post(f"/api/pos/{pos['DIST001']['id']}/erp-sync", headers=PROC)
     assert len(fake.created) == 3
+
+
+def test_manual_entry_when_erp_unavailable(client, oct_dir):
+    run_id = upload(client, oct_dir).json()["run_id"]
+    po = client.post(f"/api/runs/{run_id}/approve", headers=RAGHAV).json()["pos"][0]
+    assert client.patch(f"/api/pos/{po['id']}", headers=ANALYST, json={"status": "Entered in ERPNext", "erp_ref": "PO-9"}).status_code == 403
+    p = client.patch(f"/api/pos/{po['id']}", headers=PROC, json={"status": "Entered in ERPNext", "erp_ref": "PO-9"}).json()
+    assert (p["status"], p["erp_ref"], p["erp_po_name"]) == ("Entered in ERPNext", "PO-9", None)
 
 
 def test_po_files(client, oct_dir):
@@ -180,7 +185,7 @@ def test_po_files(client, oct_dir):
     reader = PdfReader(io.BytesIO(pdf.content))
     assert len(reader.pages) == 3
     text = "".join(pg.extract_text() for pg in reader.pages)
-    assert "Raghav Kulkarni" in text and "Generated by Freshroots Reorder Planner. Enter in Zoho Inventory." in text
+    assert "Raghav Kulkarni" in text and "Generated by Freshroots Reorder Planner. Created in ERPNext on approval." in text
     wb = load_workbook(io.BytesIO(client.get(f"/api/runs/{run_id}/pos/download?format=xlsx", headers=PROC).content))
     assert wb.sheetnames[0] == "Summary" and wb.sheetnames[-1] == "Approval Log" and len(wb.sheetnames) == 5
     rows = list(csv.DictReader(io.StringIO(client.get(f"/api/runs/{run_id}/pos/download?format=csv", headers=PROC).text)))

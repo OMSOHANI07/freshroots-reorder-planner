@@ -8,7 +8,7 @@ const inter = Inter({ variable: "--font-inter", subsets: ["latin"], display: "sw
 
 export const metadata: Metadata = {
   title: "Freshroots Reorder Planner",
-  description: "Turns weekly SAP sales and stock into a reorder plan Raghav approves, then into POs for Zoho.",
+  description: "Turns weekly SAP sales and stock into a reorder plan Raghav approves, then into purchase orders in ERPNext.",
 };
 
 export const viewport: Viewport = { themeColor: "#fbfbfd", width: "device-width", initialScale: 1 };
@@ -24,7 +24,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <Nav />
           <main id="main">{children}</main>
           <footer className="border-t border-hairline px-4 py-10 text-center text-xs text-muted sm:px-6">
-            Freshroots Reorder Planner · The rules engine recommends. Raghav decides. Procurement enters POs in Zoho.
+            Freshroots Reorder Planner · The rules engine recommends. Raghav decides. Purchase orders go to ERPNext.
           </footer>
         </Providers>
       </body>

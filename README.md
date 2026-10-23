@@ -3,7 +3,7 @@
 Turns weekly SAP sales and stock data into a reorder plan using Raghav Kulkarni's expert rules.
 An **Analyst** runs the plan on the latest SAP data (or uploads new SAP files). **Raghav approves or
 rejects the whole plan.** On approval the app creates one purchase order per supplier in
-**Zoho Inventory**; PDF, Excel and CSV copies stay available for procurement.
+**ERPNext**; PDF, Excel and CSV copies stay available for procurement.
 
 **Principle: AI vs Expert → Expert wins.** The deterministic rules engine recommends, Gemini only
 explains, and nothing is ordered until Raghav approves.
@@ -15,7 +15,7 @@ explains, and nothing is ordered until Raghav approves.
 | 5 | Predict | `src/reorder/` — deterministic Python engine (RULEBOOK Sections 5–13) |
 | 6 | Reasoning | `src/planner_api/reasoning.py` — Gemini explanations with a number guardrail and template fallback |
 | 7–9 | Draft dashboard / Approve-reject / Final dashboard | `app/runs/[id]` (Raghav's approve/reject panel), `app/runs/[id]/final` |
-| 10 | PO raised | `src/planner_api/zoho.py` creates POs in Zoho Inventory on approval; `po_docs.py` makes PDF, Excel, CSV, ZIP copies |
+| 10 | PO raised | `src/planner_api/erpnext.py` creates POs in ERPNext on approval; `po_docs.py` makes PDF, Excel, CSV, ZIP copies |
 
 ## Stack
 
@@ -36,11 +36,11 @@ make setup                # Python venv + npm install
 ```
 
 `.env` keys: `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_THINKING_LEVEL`, `DATABASE_URL`,
-`APP_TIMEZONE=Asia/Kolkata`, `COMPANY_NAME`, `COMPANY_ADDRESS` (printed on every PO), and the Zoho
-keys (`ZOHO_SYNC_ENABLED`, `ZOHO_DC`, `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN`,
-`ZOHO_ORGANIZATION_ID`, `ZOHO_MARK_ISSUED`). Never commit `.env`; keys are never logged.
+`APP_TIMEZONE=Asia/Kolkata`, `COMPANY_NAME`, `COMPANY_ADDRESS` (printed on every PO), and the ERPNext
+keys (`ERP_SYNC_ENABLED`, `ERPNEXT_URL`, `ERPNEXT_API_KEY`, `ERPNEXT_API_SECRET`, `ERPNEXT_COMPANY`,
+`ERPNEXT_WAREHOUSE`, `ERPNEXT_SUBMIT`). Never commit `.env`; keys are never logged.
 
-**Connecting Zoho:** follow [docs/ZOHO_SETUP.md](docs/ZOHO_SETUP.md).
+**Connecting ERPNext:** follow [docs/ERPNEXT_SETUP.md](docs/ERPNEXT_SETUP.md).
 
 Neon project `freshroots-reorder-planner`, database **`freshroots`**: branch **`production`** for the live site,
 branch **`development`** for local work and tests. Tables (created and migrated automatically on start-up):
@@ -53,7 +53,7 @@ branch **`development`** for local work and tests. Tables (created and migrated 
 | `sku_plan_lines` | Engine result per SKU |
 | `sku_approvals` | APPROVE line per SKU of an approved plan |
 | `sku_ai_explanations` | Gemini / template explanation per SKU |
-| `purchase_orders`, `purchase_order_lines` | POs per supplier, with Zoho status |
+| `purchase_orders`, `purchase_order_lines` | POs per supplier, with ERPNext status |
 | `audit_log` | Who did what, when, before and after |
 
 **User manual and flow chart:** [PDF](docs/Freshroots_Reorder_Planner_User_Manual.pdf) · [Markdown](docs/USER_MANUAL.md) · on the site under **Guide**.
@@ -76,14 +76,14 @@ PYTHONPATH=src python -m reorder.cli --input tests/fixtures/oct_2026 --config co
 Exit codes: 0 success, 1 FATAL validation failure, 2 pre-send check failed.
 
 Sign in (local demo, no passwords) as **Analyst** (run on latest SAP data or upload, overrides,
-retry a failed Zoho sync), **Raghav** (approve or reject the plan, nothing else) or **Procurement**
-(approved plan, Zoho PO status, PO downloads). The API enforces the role
+retry a failed ERPNext sync), **Raghav** (approve or reject the plan, nothing else) or **Procurement**
+(approved plan, ERPNext PO status, PO downloads). The API enforces the role
 on every action via the `X-Role` header, and every action is written to the audit log with
 who, when, what and the before/after values.
 
 ## Where the rules live
 
-- `RULEBOOK.md` — the specification, v2.0. `[EXP]` (Raghav) overrides `[SPEC]`. Section 19 covers roles, approval, POs, Zoho and AI.
+- `RULEBOOK.md` — the specification, v2.0. `[EXP]` (Raghav) overrides `[SPEC]`. Section 19 covers roles, approval, POs, ERPNext and AI.
 - `config.yaml` — every threshold. Nothing is hard-coded in logic.
 - `src/reorder/` — `validate.py` (I1–I12), `calculate.py` (C1–C8, decision table), `flags.py` (R1–R4, J1–J3),
   `checks.py` (O1–O8), `output.py` (CSV/xlsx/run log). Rule IDs are commented beside each piece of logic.
@@ -99,12 +99,12 @@ who, when, what and the before/after values.
 ## Known gaps
 
 - **Lead times** — not in the data; "reorder now" doesn't model supplier lead time (Q6).
-- **Stock on order** — not counted in cover; Zoho on-order data isn't connected (Q7).
-- **Unit costs** — no prices; PO price columns print "—" with a note. Enter rates in Zoho.
-- **Zoho matching** — vendors match on exact `Distributor_Name`, items on exact SKU; missing ones fail that PO with a reason (retryable).
-- **No rates in Zoho** — POs are created without `purchase_rate`; set rates in Zoho before issuing.
+- **Stock on order** — not counted in cover; on-order data isn't in the files (Q7).
+- **Unit costs** — no prices; PO price columns print "—" with a note. Set rates in ERPNext.
+- **ERPNext matching** — suppliers match on exact `Distributor_Name`, items on item code = SKU; missing ones fail that PO with a reason (retryable).
+- **No rates or lead times in ERPNext** — POs are Drafts without rates, Required By = PO date; procurement sets both before submitting.
 - **Whole-plan approval** — R1 shortfalls aren't topped up and judgment-zone SKUs aren't ordered when a plan is approved (RULEBOOK v1.2).
-- **Zoho CSV columns** — a generic PO import layout (`Purchase Order Number, Purchase Order Date, Vendor Name, Reference#, Item Name, SKU, Quantity, Usage unit, Rate, Notes`) that could not be verified against Zoho's live docs; map columns in Zoho's import wizard if a label differs.
+- **CSV copies** use ERPNext field names (`PO Number, Date, Supplier, Item Code, Item Name, Quantity, UOM, Rate, Required By, Remarks`) for ERPNext Data Import if the API is unavailable.
 - **Distributor-level behaviour** — sales are SKU-level, so unusual distributor behaviour enters only via overrides (J2).
 - **Auth** — demo role picker only; add real sign-in before production use.
 - **Scheduled drop folder** — uploads are manual; `run_plan()` takes a `{filename: bytes}` map so a twice-weekly folder watcher can call it later.

@@ -10,7 +10,7 @@ import type { RunBrief } from "@/lib/types";
 import { useRole } from "@/components/Providers";
 
 const BADGE = { draft: "bg-grey-soft text-grey", final: "bg-green-soft text-green", failed: "bg-red-soft text-red", rejected: "bg-amber-soft text-amber" };
-const BADGE_LABEL = { draft: "Awaiting Raghav's approval", final: "Approved · POs in Zoho", failed: "Failed validation", rejected: "Rejected by Raghav" };
+const BADGE_LABEL = { draft: "Awaiting Raghav's approval", final: "Approved · POs raised", failed: "Failed validation", rejected: "Rejected by Raghav" };
 
 function Runs() {
   const { role } = useRole();

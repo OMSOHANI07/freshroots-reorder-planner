@@ -122,11 +122,12 @@ export interface PO {
   supplier_name: string;
   supplier_region: string;
   po_date: string;
-  status: "Generated" | "Downloaded" | "Entered in Zoho" | "Zoho sync failed";
-  zoho_ref: string | null;
-  zoho_po_id: string | null;
-  zoho_status: string | null;
-  zoho_error: string | null;
+  status: "Generated" | "Downloaded" | "Entered in ERPNext" | "ERPNext sync failed";
+  erp_ref: string | null;
+  erp_po_name: string | null;
+  erp_status: string | null;
+  erp_error: string | null;
+  erp_url: string | null;
   total_qty: number;
   lines: POLine[];
 }
