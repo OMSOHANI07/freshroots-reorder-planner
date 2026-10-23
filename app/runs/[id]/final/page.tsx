@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { PlanTable } from "@/components/PlanTable";
 import { POTile } from "@/components/POTile";
 import { RequireRole } from "@/components/RequireRole";
-import { PlanDownloads, RunHeader, SourceTag } from "@/components/RunHeader";
+import { RunHeader } from "@/components/RunHeader";
 import { SkuDrawer } from "@/components/SkuDrawer";
 import { Button, Container, CountUp, ErrorBox, PillLink, Reveal, Spinner } from "@/components/ui";
 import { api, download, errorMessages } from "@/lib/api";
@@ -42,14 +42,12 @@ function Final() {
 
   return (
     <Container className="space-y-12 py-16">
-      <RunHeader run={run} eyebrow={`Final plan · Approved by Raghav Kulkarni · ${run.finalised_at_local}`} title="Approved and locked.">
-        <PlanDownloads runId={run.id} />
-      </RunHeader>
+      <RunHeader run={run} title="Approved. Orders are ready." />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Reveal><div className="rounded-[22px] bg-ink p-6 text-white"><p className="text-sm text-white/60">Units approved by Raghav</p><CountUp value={finalTotal} className="mt-1 block text-5xl font-semibold tracking-tight" /><p className="mt-2 text-sm text-white/60">{run.review_note ? `“${run.review_note}”` : "Approved as recommended."}</p></div></Reveal>
         <Reveal delay={0.05}><div className="h-full rounded-[22px] border border-hairline/70 bg-tile p-6"><p className="text-sm text-muted">POs in Zoho Inventory</p><p className="mt-1 text-5xl font-semibold tracking-tight tabular">{pos ? `${inZoho}/${pos.length}` : "—"}</p><p className="mt-2 text-sm text-muted">{pos && inZoho < pos.length ? "Some POs need attention below." : "Created automatically on approval."}</p></div></Reveal>
-        <Reveal delay={0.1}><div className="flex h-full flex-col justify-between gap-3 rounded-[22px] border border-hairline/70 bg-tile p-6"><p className="text-sm text-muted">Data</p><SourceTag run={run} /><p className="text-sm text-muted">Run by {run.created_by} · run date {run.run_date}</p></div></Reveal>
+        <Reveal delay={0.1}><div className="h-full rounded-[22px] border border-hairline/70 bg-tile p-6"><p className="text-sm text-muted">Approved by</p><p className="mt-1 text-2xl font-semibold tracking-tight">{run.finalised_by}</p><p className="mt-2 text-sm text-muted">{run.finalised_at_local}</p></div></Reveal>
       </div>
 
       <section aria-labelledby="po-title">

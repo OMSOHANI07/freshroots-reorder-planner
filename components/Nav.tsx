@@ -7,17 +7,19 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useRole } from "./Providers";
 
 const LINKS = [
-  { href: "/", label: "Overview" },
+  { href: "/", label: "Home" },
   { href: "/runs/new", label: "New run", analystOnly: true },
   { href: "/runs", label: "Plans" },
+  { href: "/data", label: "Data" },
   { href: "/history", label: "History" },
+  { href: "/guide", label: "Guide", public: true },
 ];
 
 export function Nav() {
   const { role, setRole } = useRole();
   const path = usePathname();
   const [open, setOpen] = useState(false);
-  const links = LINKS.filter((l) => !l.analystOnly || role === "analyst");
+  const links = LINKS.filter((l) => (!l.analystOnly || role === "analyst") && (role || l.public || l.href === "/"));
   const who = role === "raghav" ? "Raghav · Approver" : role === "analyst" ? "Analyst" : role === "procurement" ? "Procurement" : null;
   return (
     <header className="sticky top-0 z-50 border-b border-black/10 bg-[rgba(251,251,253,0.72)] backdrop-blur-[20px] backdrop-saturate-150">

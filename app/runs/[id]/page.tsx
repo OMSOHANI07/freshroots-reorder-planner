@@ -6,7 +6,7 @@ import { ApprovalPanel } from "@/components/ApprovalPanel";
 import { PlanTable } from "@/components/PlanTable";
 import { useRole } from "@/components/Providers";
 import { RequireRole } from "@/components/RequireRole";
-import { PlanDownloads, RunHeader, SourceTag, SummaryTiles } from "@/components/RunHeader";
+import { RunHeader, SummaryTiles } from "@/components/RunHeader";
 import { SkuDrawer } from "@/components/SkuDrawer";
 import { Container, ErrorBox, PillLink, Reveal, Spinner } from "@/components/ui";
 import { useRun } from "@/lib/useRun";
@@ -33,11 +33,9 @@ function Draft() {
   }
 
   const title = { draft: "This week's plan.", final: "Approved.", rejected: "Rejected.", failed: "" }[run.status];
-  const eyebrow = { draft: "Draft plan · Awaiting Raghav's approval", final: "Approved plan", rejected: `Rejected by ${run.finalised_by} · ${run.finalised_at_local}`, failed: "" }[run.status];
   return (
     <Container className="space-y-10 py-16">
-      <RunHeader run={run} eyebrow={eyebrow} title={title}><PlanDownloads runId={run.id} /></RunHeader>
-      <SourceTag run={run} />
+      <RunHeader run={run} title={title} />
       {run.status === "rejected" && (
         <Reveal>
           <div className="rounded-[22px] border border-amber/30 bg-amber-soft px-6 py-5">
@@ -49,22 +47,22 @@ function Draft() {
       )}
       {run.status === "final" && <PillLink href={`/runs/${run.id}/final`}>Open approved plan and POs</PillLink>}
       {run.status === "draft" && role === "raghav" && <Reveal><ApprovalPanel run={run} onOpen={setOpen} /></Reveal>}
+      <SummaryTiles run={run} />
       {run.status === "draft" && role !== "raghav" && (
         <Reveal>
-          <div className="rounded-[22px] bg-ink px-6 py-5 text-white">
-            <p className="font-semibold">Awaiting Raghav&apos;s approval</p>
-            <p className="text-sm text-white/70">When Raghav approves, the purchase orders are created in Zoho Inventory automatically.</p>
-          </div>
+          <p className="rounded-[22px] bg-tile-alt px-6 py-5 text-[17px]">
+            <span className="font-semibold">Next: Raghav approves or rejects.</span>{" "}
+            <span className="text-muted">On approval, one purchase order per supplier is created.</span>
+          </p>
         </Reveal>
       )}
-      <SummaryTiles run={run} />
       <section aria-labelledby="plan-title">
         <div className="mb-4 flex items-end justify-between">
           <h2 id="plan-title" className="text-2xl font-semibold tracking-tight">Recommendations</h2>
           {explaining && <Spinner label="Writing AI explanations…" />}
         </div>
         <PlanTable lines={run.lines} onOpen={setOpen} />
-        <p className="mt-3 text-sm text-muted">Select a row for the 16-week sales sparkline, cover before and after, rules fired and the AI explanation.</p>
+        <p className="mt-3 text-sm text-muted">Tap any SKU to see its sales, stock cover and why the rules decided what they did.</p>
       </section>
       <SkuDrawer line={open} onClose={() => setOpen(null)} />
     </Container>

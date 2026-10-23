@@ -18,7 +18,10 @@ from reorder.io import OPTIONAL_FILES, REQUIRED_FILES
 from reorder.output import plan_csv, plan_xlsx, run_log
 
 from . import po_docs, reasoning
-from .db import PO, AuditLog, Decision, Explanation, InputFileRec, PlanLine, POLine, Run, audit, get_session, utcnow
+from .db import (
+    PO, AuditLog, CurrentInventory, Decision, DistributorMaster, Explanation, FestivalCalendar, InputFileRec,
+    JudgmentOverride, PlanLine, POLine, Run, SkuMaster, WeeklySales, audit, get_session, store_master_data, utcnow,
+)
 from .zoho import ZohoClient, ZohoConfig, ZohoError
 from .settings import get_settings
 
@@ -121,6 +124,42 @@ def latest_dataset(s: Session) -> Run | None:
                      .order_by(Run.id.desc()).limit(1)).first()
 
 
+@app.get("/api/master")
+def master_data(role: str = Depends(current_role), s: Session = Depends(get_session)):
+    """Read-only view of the latest SAP master data (RULEBOOK Section 16 governs changes)."""
+    run = latest_dataset(s)
+    if run is None:
+        return None
+    rid = run.id
+    dists = {d.distributor_id: d for d in s.scalars(select(DistributorMaster).where(DistributorMaster.run_id == rid))}
+    inv = {i.sku_id: i for i in s.scalars(select(CurrentInventory).where(CurrentInventory.run_id == rid))}
+    sales: dict[str, list[dict]] = {}
+    for w in s.scalars(select(WeeklySales).where(WeeklySales.run_id == rid)):
+        sales.setdefault(w.sku_id, []).append({"week": w.week, "units": w.units_sold})
+    skus = []
+    for k in s.scalars(select(SkuMaster).where(SkuMaster.run_id == rid).order_by(SkuMaster.sku_id)):
+        hist = sorted(sales.get(k.sku_id, []), key=lambda h: (int(h["week"][:4]), int(h["week"][6:])))
+        d = dists.get(k.distributor_id)
+        skus.append({"sku_id": k.sku_id, "sku_name": k.sku_name, "category": k.category,
+                     "perishability": k.perishability, "standard_reorder_qty": k.standard_reorder_qty,
+                     "unit_of_measure": k.unit_of_measure, "distributor_id": k.distributor_id,
+                     "supplier_name": d.distributor_name if d else "",
+                     "units_on_hand": inv[k.sku_id].units_on_hand if k.sku_id in inv else None,
+                     "location": inv[k.sku_id].location if k.sku_id in inv else None,
+                     "sales": hist[-16:]})
+    suppliers = [{"distributor_id": d.distributor_id, "distributor_name": d.distributor_name, "region": d.region,
+                  "status": d.status, "sku_count": sum(1 for k in skus if k["distributor_id"] == d.distributor_id)}
+                 for d in sorted(dists.values(), key=lambda d: d.distributor_id)]
+    calendar = [{"year_month": c.year_month, "is_festival_month": c.is_festival_month}
+                for c in s.scalars(select(FestivalCalendar).where(FestivalCalendar.run_id == rid)
+                                   .order_by(FestivalCalendar.year, FestivalCalendar.month))]
+    overrides = [{"sku_id": o.sku_id, "reason": o.reason, "entered_by": o.entered_by, "valid_until": o.valid_until}
+                 for o in s.scalars(select(JudgmentOverride).where(JudgmentOverride.run_id == rid))]
+    return {"run_id": rid, "uploaded_at_local": local_ts(run.created_at), "uploaded_by": run.created_by,
+            "as_of_date": (run.summary or {}).get("as_of_date"), "skus": skus, "suppliers": suppliers,
+            "calendar": calendar, "overrides": overrides}
+
+
 @app.get("/api/sap/latest")
 def sap_latest(role: str = Depends(current_role), s: Session = Depends(get_session)):
     run = latest_dataset(s)
@@ -190,6 +229,8 @@ async def create_run(
         if name in known:
             pf = res.files[name]
             s.add(InputFileRec(run_id=run.id, name=name, sha256=pf.sha256, row_count=pf.row_count, content=raw[name]))
+    if not res.fatal and source == "upload":
+        store_master_data(s, run.id, {n: b for n, b in raw.items() if n in known})
     if not res.fatal:
         for r in res.rows:
             ex = res.extras[r["sku_id"]]

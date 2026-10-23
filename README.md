@@ -10,7 +10,7 @@ explains, and nothing is ordered until Raghav approves.
 
 | # | Component | Where |
 |---|---|---|
-| 1–2 | SAP data download / Excel data | New run page → `POST /api/runs`; files + SHA-256 stored per run in Neon |
+| 1–2 | SAP data download / Excel data | New run page → `POST /api/runs`; raw files + SHA-256 in `sap_upload_files`, readable copies in `sku_master`, `weekly_sales`, etc. |
 | 3–4 | AI rules / Raghav's rules | `RULEBOOK.md`, `config.yaml`, `calendar.csv`, optional `judgment_overrides.csv` (version-stamped per run) |
 | 5 | Predict | `src/reorder/` — deterministic Python engine (RULEBOOK Sections 5–13) |
 | 6 | Reasoning | `src/planner_api/reasoning.py` — Gemini explanations with a number guardrail and template fallback |
@@ -42,7 +42,21 @@ keys (`ZOHO_SYNC_ENABLED`, `ZOHO_DC`, `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `Z
 
 **Connecting Zoho:** follow [docs/ZOHO_SETUP.md](docs/ZOHO_SETUP.md).
 
-Use a separate Neon branch for local work (`dev`) and the default branch for production.
+Neon project `freshroots-reorder-planner`, database **`freshroots`**: branch **`production`** for the live site,
+branch **`development`** for local work and tests. Tables (created and migrated automatically on start-up):
+
+| Table | Holds |
+|---|---|
+| `plan_runs` | One row per plan run: status, summary, config, rule book version, approval |
+| `sap_upload_files` | Raw SAP files per run, with SHA-256 |
+| `sku_master`, `distributor_master`, `weekly_sales`, `current_inventory`, `festival_calendar`, `judgment_overrides` | Readable copies of each SAP upload |
+| `sku_plan_lines` | Engine result per SKU |
+| `sku_approvals` | APPROVE line per SKU of an approved plan |
+| `sku_ai_explanations` | Gemini / template explanation per SKU |
+| `purchase_orders`, `purchase_order_lines` | POs per supplier, with Zoho status |
+| `audit_log` | Who did what, when, before and after |
+
+**User manual and flow chart:** [docs/USER_MANUAL.md](docs/USER_MANUAL.md), also on the site under **Guide**.
 
 ## How to run
 
@@ -69,7 +83,7 @@ who, when, what and the before/after values.
 
 ## Where the rules live
 
-- `RULEBOOK.md` — the specification. `[EXP]` (Raghav) overrides `[SPEC]`. Change log at the end (v1.1 amendments).
+- `RULEBOOK.md` — the specification, v2.0. `[EXP]` (Raghav) overrides `[SPEC]`. Section 19 covers roles, approval, POs, Zoho and AI.
 - `config.yaml` — every threshold. Nothing is hard-coded in logic.
 - `src/reorder/` — `validate.py` (I1–I12), `calculate.py` (C1–C8, decision table), `flags.py` (R1–R4, J1–J3),
   `checks.py` (O1–O8), `output.py` (CSV/xlsx/run log). Rule IDs are commented beside each piece of logic.

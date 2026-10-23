@@ -193,3 +193,33 @@ def test_plan_files_match_engine(client, oct_dir):
     run_id = upload(client, oct_dir).json()["run_id"]
     csv_text = client.get(f"/api/runs/{run_id}/plan?format=csv", headers=RAGHAV).text
     assert ",750,0,6.14,0,R3," in csv_text
+
+
+def test_master_data_tables(client, oct_dir):
+    assert client.get("/api/master", headers=PROC).json() is None
+    run_id = upload(client, oct_dir).json()["run_id"]
+    m = client.get("/api/master", headers=PROC).json()
+    assert m["run_id"] == run_id
+    assert len(m["skus"]) == 15 and len(m["suppliers"]) == 4 and len(m["calendar"]) == 24
+    sku1 = next(k for k in m["skus"] if k["sku_id"] == "SKU001")
+    assert (sku1["supplier_name"], sku1["units_on_hand"], sku1["standard_reorder_qty"]) == ("NutriFlow Distributors", 900, 500)
+    assert [h["week"] for h in sku1["sales"]][-1] == "2026-W42" and len(sku1["sales"]) == 16
+    assert {c["year_month"] for c in m["calendar"] if c["is_festival_month"]} >= {"2026-03", "2026-10", "2026-11"}
+    # a run on the latest SAP data doesn't duplicate master rows
+    client.post("/api/runs", data={"source": "sap_latest", "run_date": "2026-10-19"}, headers=ANALYST)
+    with db._Session() as s:
+        from sqlalchemy import func, select
+        assert s.scalar(select(func.count()).select_from(db.SkuMaster)) == 15
+        assert s.scalar(select(func.count()).select_from(db.WeeklySales)) == 240
+
+
+def test_backfill_master_data(client, oct_dir):
+    run_id = upload(client, oct_dir).json()["run_id"]
+    with db._Session() as s:
+        from sqlalchemy import delete
+        for t in (db.SkuMaster, db.DistributorMaster, db.WeeklySales, db.CurrentInventory, db.FestivalCalendar):
+            s.execute(delete(t))
+        s.commit()
+    db._backfill_master_data()
+    assert client.get("/api/master", headers=PROC).json()["run_id"] == run_id
+    assert len(client.get("/api/master", headers=PROC).json()["skus"]) == 15

@@ -45,8 +45,8 @@ export function ApprovalPanel({ run, onOpen }: { run: RunDetail; onOpen: (l: Lin
       <p className="eyebrow text-white/60">Raghav&apos;s decision</p>
       <h2 id="approval-title" className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">Approve this plan?</h2>
       <p className="mt-3 max-w-2xl text-white/75">
-        Approving orders {n0(run.summary!.total_units_now)} units across {orderLines.length} SKUs and creates {suppliers.size} purchase
-        order{suppliers.size === 1 ? "" : "s"} in Zoho Inventory, one per supplier. Rejecting creates nothing.
+        Approving orders {n0(run.summary!.total_units_now)} units across {orderLines.length} SKUs and raises {suppliers.size} purchase
+        order{suppliers.size === 1 ? "" : "s"}, one per supplier (sent to Zoho Inventory when it&apos;s connected). Rejecting orders nothing.
       </p>
       {flagged.length > 0 && (
         <div className="mt-6">
@@ -105,7 +105,7 @@ export function ApprovalPanel({ run, onOpen }: { run: RunDetail; onOpen: (l: Lin
               </motion.svg>
               <p className="mt-6 text-3xl font-semibold tracking-tight">Plan approved.</p>
               <p className="mt-2 text-muted">
-                {done.failed === 0 ? `${done.ok} PO${done.ok === 1 ? "" : "s"} created in Zoho Inventory.` : `${done.ok} created in Zoho · ${done.failed} need attention.`}
+                {done.failed === 0 ? `${done.ok} PO${done.ok === 1 ? "" : "s"} created in Zoho Inventory.` : done.ok === 0 ? "Purchase orders are ready for procurement." : `${done.ok} created in Zoho · ${done.failed} need attention.`}
               </p>
             </div>
           </motion.div>
