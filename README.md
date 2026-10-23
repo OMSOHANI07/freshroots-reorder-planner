@@ -41,6 +41,9 @@ keys (`ERP_SYNC_ENABLED`, `ERPNEXT_URL`, `ERPNEXT_API_KEY`, `ERPNEXT_API_SECRET`
 `ERPNEXT_WAREHOUSE`, `ERPNEXT_SUBMIT`). Never commit `.env`; keys are never logged.
 
 **Connecting ERPNext:** follow [docs/ERPNEXT_SETUP.md](docs/ERPNEXT_SETUP.md).
+**Live ERPNext:** https://freshroots.m.frappe.cloud (Frappe Cloud trial). Company Freshroots (FR), warehouse
+Pune Central Warehouse - FR, 4 suppliers and 15 items loaded from the SAP master data. Sync is on in production
+and off locally (`ERP_SYNC_ENABLED=false` in `.env`) so tests never create real POs.
 
 Neon project `freshroots-reorder-planner`, database **`freshroots`**: branch **`production`** for the live site,
 branch **`development`** for local work and tests. Tables (created and migrated automatically on start-up):
@@ -102,6 +105,7 @@ who, when, what and the before/after values.
 - **Stock on order** — not counted in cover; on-order data isn't in the files (Q7).
 - **Unit costs** — no prices; PO price columns print "—" with a note. Set rates in ERPNext.
 - **ERPNext matching** — suppliers match on exact `Distributor_Name`, items on item code = SKU; missing ones fail that PO with a reason (retryable).
+- **HSN codes** — ERPNext's India Compliance "Validate HSN/SAC Code" is switched off because the SAP data has no HSN codes; add real codes to the items and switch it back on before filing GST.
 - **No rates or lead times in ERPNext** — POs are Drafts without rates, Required By = PO date; procurement sets both before submitting.
 - **Whole-plan approval** — R1 shortfalls aren't topped up and judgment-zone SKUs aren't ordered when a plan is approved (RULEBOOK v1.2).
 - **CSV copies** use ERPNext field names (`PO Number, Date, Supplier, Item Code, Item Name, Quantity, UOM, Rate, Required By, Remarks`) for ERPNext Data Import if the API is unavailable.
