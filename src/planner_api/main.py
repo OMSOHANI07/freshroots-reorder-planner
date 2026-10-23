@@ -31,7 +31,7 @@ app = FastAPI(title="Freshroots Reorder Planner API", version="1.2.0")
 # The Analyst runs plans, Raghav only approves or rejects the whole plan,
 # approval creates the supplier POs in ERPNext (RULEBOOK Section 19).
 USERS = {"analyst": "Analyst", "raghav": "Raghav Kulkarni", "procurement": "Procurement"}
-PO_STATUSES = ("Generated", "Downloaded", "Entered in ERPNext", "ERPNext sync failed")
+PO_STATUSES = ("Generated", "Downloaded", "Entered in ERPNext", "ERPNext sync failed", "Submitted in ERPNext")
 
 
 # ---------- roles ----------
@@ -433,18 +433,17 @@ def retry_erp(po_id: int, role: str = Depends(require("analyst", "procurement"))
     return po_dict(p)
 
 
-def erp_link(p: PO) -> str | None:
-    url = ERPNextConfig.from_env().url
-    return f"{url}/app/purchase-order/{p.erp_po_name}" if url and p.erp_po_name else None
-
-
 def po_dict(p: PO) -> dict:
     return {"id": p.id, "run_id": p.run_id, "po_number": p.po_number, "distributor_id": p.distributor_id,
             "supplier_name": p.supplier_name, "supplier_region": p.supplier_region, "po_date": p.po_date,
             "status": p.status, "erp_ref": p.erp_ref, "erp_po_name": p.erp_po_name, "erp_status": p.erp_status,
-            "erp_error": p.erp_error, "erp_url": erp_link(p), "total_qty": p.total_qty,
+            "erp_error": p.erp_error, "total_qty": p.total_qty, "required_by": p.required_by,
+            "erp_submitted_at_local": local_ts(p.erp_submitted_at), "erp_submitted_by": p.erp_submitted_by,
+            "total_amount": (sum(l.rate * l.quantity for l in p.lines) if p.lines and all(l.rate is not None for l in p.lines)
+                             else None),
             "lines": [{"sku_id": l.sku_id, "sku_name": l.sku_name, "uom": l.uom, "quantity": l.quantity,
-                       "decision_source": l.decision_source, "engine_qty": l.engine_qty} for l in p.lines]}
+                       "decision_source": l.decision_source, "engine_qty": l.engine_qty, "rate": l.rate}
+                      for l in p.lines]}
 
 
 @app.get("/api/runs/{run_id}/pos")
@@ -460,7 +459,8 @@ def to_doc(run: Run, p: PO) -> po_docs.PODoc:
         supplier_id=p.distributor_id, supplier_name=p.supplier_name, supplier_region=p.supplier_region,
         approved_at=local_ts(run.finalised_at) or "", company_name=st.company_name,
         company_address=st.company_address,
-        lines=[{"sku_id": l.sku_id, "sku_name": l.sku_name, "uom": l.uom, "quantity": l.quantity,
+        required_by=p.required_by,
+        lines=[{"sku_id": l.sku_id, "sku_name": l.sku_name, "uom": l.uom, "quantity": l.quantity, "rate": l.rate,
                 "decision_source": l.decision_source} for l in p.lines],
     )
 
@@ -532,6 +532,57 @@ def download_run_pos(run_id: int, format: Literal["pdf", "xlsx", "csv", "zip"] =
         })
     _mark_downloaded(s, list(pos), role, format)
     return _file(data, format, f"freshroots_pos_run{run_id}_{run.order_month}.{format}")
+
+
+class POSubmit(BaseModel):
+    rates: dict[str, float]
+    required_by: str
+
+
+@app.post("/api/pos/{po_id}/erp-submit")
+def submit_po(po_id: int, body: POSubmit, role: str = Depends(require("procurement")),
+              s: Session = Depends(get_session)):
+    """Procurement completes the PO without signing in to ERPNext: rates + Required By, then submit."""
+    p = s.get(PO, po_id)
+    if p is None:
+        raise HTTPException(404, "PO not found")
+    if not p.erp_po_name:
+        raise HTTPException(409, "This PO isn't in ERPNext yet. Retry the ERPNext sync first.")
+    if p.status == "Submitted in ERPNext":
+        raise HTTPException(409, "This PO is already submitted in ERPNext")
+    errors = []
+    try:
+        req = date.fromisoformat(body.required_by)
+        if req < date.fromisoformat(p.po_date):
+            errors.append("Required By can't be before the PO date")
+    except ValueError:
+        errors.append("Required By must be a date (YYYY-MM-DD)")
+    for l in p.lines:
+        r = body.rates.get(l.sku_id)
+        if r is None or not (r > 0):
+            errors.append(f"Enter a rate above 0 for {l.sku_id}")
+    if errors:
+        raise HTTPException(422, {"errors": errors})
+    cfg = ERPNextConfig.from_env()
+    if not cfg.ready:
+        raise HTTPException(503, f"ERPNext not connected: {cfg.status()}")
+    rates = {l.sku_id: float(body.rates[l.sku_id]) for l in p.lines}
+    try:
+        doc = ERPNextClient(cfg, transport=_erp_transport).submit_po(p.erp_po_name, rates=rates, required_by=body.required_by)
+    except (ERPNextError, Exception) as exc:
+        raise HTTPException(502, {"errors": [str(exc)[:300]]})
+    before = {"status": p.status, "erp_status": p.erp_status}
+    for l in p.lines:
+        l.rate = rates[l.sku_id]
+    p.required_by = body.required_by
+    p.status = "Submitted in ERPNext"
+    p.erp_status = doc.get("status") or "Submitted"
+    p.erp_submitted_at = utcnow()
+    p.erp_submitted_by = USERS[role]
+    audit(s, USERS[role], "po.erp_submitted", p.run_id, f"po:{p.po_number}", before,
+          {"status": p.status, "erp_status": p.erp_status, "required_by": p.required_by, "rates": rates})
+    s.commit()
+    return po_dict(p)
 
 
 class POPatch(BaseModel):

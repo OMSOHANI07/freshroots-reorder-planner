@@ -47,6 +47,7 @@ function describe(a: AuditEntry) {
     case "run.reject": return `Rejected the plan · “${String(after.note)}”`;
     case "po.erp_created": return `${a.entity?.replace("po:", "")} created in ERPNext as ${String(after.erp_po_name)} (${String(after.erp_status ?? "Draft")})`;
     case "po.erp_failed": return `${a.entity?.replace("po:", "")} ERPNext sync failed: ${String(after.error)}`;
+    case "po.erp_submitted": return `${a.entity?.replace("po:", "")} submitted to ERPNext · required by ${String(after.required_by)}`;
     case "po.entered_manually": return `${a.entity?.replace("po:", "")} entered by hand · ref ${String(after.erp_ref)}`;
     case "po.download": return `${a.entity?.replace("po:", "")} downloaded (${String(after.format)})`;
     case "po.entered_in_zoho": return `${a.entity?.replace("po:", "")} entered by hand · ref ${String(after.zoho_ref ?? after.erp_ref)}`;

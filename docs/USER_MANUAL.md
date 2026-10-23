@@ -88,11 +88,11 @@ You can't change a single SKU's quantity. To change something, reject the plan w
 
 1. **Home** opens the latest approved plan. Or go to **Plans** and pick one marked *Approved*.
 2. Each supplier has one **purchase order** tile: its lines, total units and status.
-   - **In ERPNext as PUR-ORD-…**: created in ERPNext as a Draft. Press **Open in ERPNext**, add rates and the real Required By date, then submit it.
+   - **Draft in ERPNext**: press **Complete order**, type each SKU's rate, pick the **Required By** date, press **Review**, then **Submit to ERPNext**. No ERPNext sign-in is needed.
    - **ERPNext sync failed**: the tile says why (for example, a supplier or item missing in ERPNext). Fix it in ERPNext, then press **Retry ERPNext**.
    - **ERPNext not connected**: use the downloads and enter the PO in ERPNext by hand, then press **Entered manually** and type the reference.
 3. **Download** gives a PDF, Excel or CSV of one PO. **All as ZIP** gives everything for the plan.
-4. There are **no prices or lead times** in the source data. Add them in ERPNext.
+4. There are **no prices or lead times** in the source data, so you type them in before submitting.
 
 ---
 

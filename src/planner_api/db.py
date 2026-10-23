@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from typing import Iterator
 
 from sqlalchemy import (
-    JSON, Boolean, DateTime, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint,
+    JSON, Boolean, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint,
     create_engine,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
@@ -130,6 +130,9 @@ class PO(Base):
     erp_status: Mapped[str | None] = mapped_column(String(32), nullable=True)     # Draft | To Receive and Bill | ...
     erp_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     erp_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    required_by: Mapped[str | None] = mapped_column(String(10), nullable=True)     # entered by procurement
+    erp_submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    erp_submitted_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
     total_qty: Mapped[int] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     lines: Mapped[list["POLine"]] = relationship(back_populates="po", cascade="all, delete-orphan",
@@ -146,6 +149,7 @@ class POLine(Base):
     quantity: Mapped[int] = mapped_column(Integer)
     decision_source: Mapped[str] = mapped_column(String(16))  # APPROVE | CHANGE
     engine_qty: Mapped[int] = mapped_column(Integer)
+    rate: Mapped[float | None] = mapped_column(Float, nullable=True)  # entered by procurement, never computed
     po: Mapped[PO] = relationship(back_populates="lines")
 
 
@@ -313,6 +317,10 @@ ADD_COLUMNS = [
     "ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS erp_status VARCHAR(32)",
     "ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS erp_error TEXT",
     "ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS erp_synced_at TIMESTAMPTZ",
+    "ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS required_by VARCHAR(10)",
+    "ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS erp_submitted_at TIMESTAMPTZ",
+    "ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS erp_submitted_by VARCHAR(64)",
+    "ALTER TABLE purchase_order_lines ADD COLUMN IF NOT EXISTS rate DOUBLE PRECISION",
 ]
 
 

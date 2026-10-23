@@ -112,6 +112,7 @@ export interface POLine {
   quantity: number;
   decision_source: "APPROVE" | "CHANGE";
   engine_qty: number;
+  rate: number | null;
 }
 
 export interface PO {
@@ -122,12 +123,15 @@ export interface PO {
   supplier_name: string;
   supplier_region: string;
   po_date: string;
-  status: "Generated" | "Downloaded" | "Entered in ERPNext" | "ERPNext sync failed";
+  status: "Generated" | "Downloaded" | "Entered in ERPNext" | "ERPNext sync failed" | "Submitted in ERPNext";
   erp_ref: string | null;
   erp_po_name: string | null;
   erp_status: string | null;
   erp_error: string | null;
-  erp_url: string | null;
+  required_by: string | null;
+  erp_submitted_at_local: string | null;
+  erp_submitted_by: string | null;
+  total_amount: number | null;
   total_qty: number;
   lines: POLine[];
 }

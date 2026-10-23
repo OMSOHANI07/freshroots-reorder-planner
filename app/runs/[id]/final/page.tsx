@@ -55,7 +55,7 @@ function Final() {
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <h2 id="po-title" className="section-title">Purchase orders.</h2>
-              <p className="mt-2 text-muted">One PO per supplier, created in ERPNext when Raghav approved. Rates aren&apos;t in the data, so set them in ERPNext.</p>
+              <p className="mt-2 text-muted">One PO per supplier, created in ERPNext when Raghav approved. Procurement adds rates and submits each one here, with no ERPNext sign-in.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="secondary" onClick={() => dlAll("pdf")}>All PDF</Button>
@@ -74,7 +74,7 @@ function Final() {
               ))}
             </div>
           )}
-          <p className="mt-4 text-sm text-muted">Prices are not in the source data, so price columns print as “—”. Set rates in ERPNext.</p>
+          <p className="mt-4 text-sm text-muted">Until rates are entered, price columns in the files print as “—”.</p>
         </motion.div>
       </section>
 

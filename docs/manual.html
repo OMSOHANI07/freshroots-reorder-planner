@@ -63,7 +63,7 @@
       <tr><td class="muted">Website</td><td><a href="https://freshroots-reorder-planner.vercel.app">freshroots-reorder-planner.vercel.app</a></td></tr>
       <tr><td class="muted">In-app guide</td><td><a href="https://freshroots-reorder-planner.vercel.app/guide">freshroots-reorder-planner.vercel.app/guide</a></td></tr>
       <tr><td class="muted">Code</td><td><a href="https://github.com/OMSOHANI07/freshroots-reorder-planner">github.com/OMSOHANI07/freshroots-reorder-planner</a></td></tr>
-      <tr><td class="muted">Rules</td><td>RULEBOOK.md, version 2.1 (pending sign-off by Raghav Kulkarni and Deepa Nair)</td></tr>
+      <tr><td class="muted">Rules</td><td>RULEBOOK.md, version 2.2 (pending sign-off by Raghav Kulkarni and Deepa Nair)</td></tr>
       <tr><td class="muted">Date</td><td>23 October 2026</td></tr>
     </table>
   </div>
@@ -159,12 +159,12 @@
   <ol class="steps">
     <li><span class="ui">Home</span> opens the latest approved plan; or go to <span class="ui">Plans</span> and pick one marked <i>Approved</i>.</li>
     <li>Each supplier has one purchase-order tile with its lines, total units and status.</li>
-    <li><b>In ERPNext as PUR-ORD-…</b> — created in ERPNext as a Draft. Press <span class="ui">Open in ERPNext</span>, add rates and the real Required By date, then submit it.</li>
+    <li><b>Draft in ERPNext</b> — press <span class="ui">Complete order</span>, type each SKU's rate, pick the <span class="ui">Required By</span> date, press <span class="ui">Review</span>, then <span class="ui">Submit to ERPNext</span>. No ERPNext sign-in is needed.</li>
     <li><b>ERPNext sync failed</b> — the tile says why (for example, a supplier or item missing in ERPNext). Fix it in ERPNext, then press <span class="ui">Retry ERPNext</span>.</li>
     <li><b>ERPNext not connected</b> — use the downloads, enter the PO in ERPNext by hand, then press <span class="ui">Entered manually</span> and type the reference.</li>
     <li><span class="ui">Download</span> gives a PDF, Excel or CSV of one PO; <span class="ui">All as ZIP</span> gives everything for the plan.</li>
   </ol>
-  <p class="tip">There are <b>no prices or lead times</b> in the source data. Add them in ERPNext before submitting a PO.</p>
+  <p class="tip">There are <b>no prices or lead times</b> in the source data, so you type them in before submitting. The planner never guesses them.</p>
 </section>
 
 <section>
@@ -211,7 +211,7 @@
     <dt>Who decides how much to order?</dt><dd>The rules engine, using Raghav's thresholds. Raghav approves or rejects the plan. AI only explains.</dd>
     <dt>Who can change a rule or threshold?</dt><dd>Only Raghav, with sign-off from Deepa Nair (Head of Operations). See RULEBOOK.md, Section 16. Procurement and the Analyst can't.</dd>
     <dt>When is a month a festival month?</dt><dd>Only when the festival calendar marks it. Today: March, October and November. Expected demand goes up 25%.</dd>
-    <dt>Why are there no prices on the POs?</dt><dd>The SAP files have no unit costs, and the planner never guesses. Add rates in ERPNext.</dd>
+    <dt>Why are there no prices on the POs?</dt><dd>The SAP files have no unit costs, and the planner never guesses. Procurement types the rates on each PO before submitting.</dd>
     <dt>What if ERPNext is down or not connected?</dt><dd>The approval still stands and the POs are kept. Each one shows the reason and can be retried or entered by hand.</dd>
     <dt>Where is the history?</dt><dd><span class="ui">History</span> shows every plan, the rejection rate (the kill line is 40%), and the audit log of who did what and when.</dd>
   </dl>

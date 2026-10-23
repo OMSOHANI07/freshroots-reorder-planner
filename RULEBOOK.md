@@ -1,6 +1,6 @@
 # Freshroots Reorder Plan — Rule Book
 
-**Version:** 2.1 (23 Oct 2026)
+**Version:** 2.2 (23 Oct 2026)
 **Status:** In force for the app. **Pending sign-off by Raghav Kulkarni and Deepa Nair** (Section 16).
 **Purpose:** Single source of truth for the Freshroots reorder plan: the calculation rules, who does what, and how orders are raised.
 **Audience:** The demand planning team (Raghav), the analyst, procurement, and whoever maintains the code.
@@ -10,7 +10,7 @@
 - **[SPEC]** *Freshroots Reorder Plan Rule Sheet*, the technical specification.
 - The workflow decisions of 22 Oct 2026 (Section 19), which this version folds into the body.
 
-**What changed in 2.0 and 2.1:** nothing in the calculations (Sections 5–14 and the golden test are unchanged). 2.0 wrote the workflow, roles, AI use and purchase orders into the body (Section 19). 2.1 moves purchase orders from Zoho Inventory to ERPNext.
+**What changed in 2.0 and 2.1:** nothing in the calculations (Sections 5–14 and the golden test are unchanged). 2.0 wrote the workflow, roles, AI use and purchase orders into the body (Section 19). 2.1 moves purchase orders from Zoho Inventory to ERPNext. 2.2 lets procurement add rates and submit POs from the planner.
 
 ---
 
@@ -525,6 +525,7 @@ Implement the default shown and keep it configurable. **Don't resolve these your
 | 1.2 | 22 Oct 2026 | Analyst runs plans; Raghav approves or rejects the whole plan; approval creates POs in Zoho Inventory; kill criterion = plan rejection rate. Superseded the per-SKU decisions of 1.1. | Product owner; pending Raghav and Deepa |
 | 2.0 | 23 Oct 2026 | Consolidation: the 1.1 and 1.2 workflow written into the body (Sections 0, 1, 2, 12, 16, new Section 19); contradictions removed; data storage named. **No change to any calculation, threshold or the golden test.** | Product owner; **pending Raghav Kulkarni and Deepa Nair** |
 | 2.1 | 23 Oct 2026 | Purchase orders go to **ERPNext** instead of Zoho Inventory (the Zoho account could not create an organization). Same rules: only after approval, approved quantities only, no rates, idempotent retries. "Required By" is set to the PO date because lead times are not in the data. **No change to any calculation or the golden test.** | Product owner; **pending Raghav Kulkarni and Deepa Nair** |
+| 2.2 | 23 Oct 2026 | Procurement completes POs in the planner (rates, Required By, submit to ERPNext via the API), so no one needs an ERPNext login. Rates are entered by people, never computed. **No change to any calculation or the golden test.** | Product owner; **pending Raghav Kulkarni and Deepa Nair** |
 
 ---
 
@@ -536,7 +537,7 @@ Implement the default shown and keep it configurable. **Don't resolve these your
 |---|---|---|
 | Analyst | Run a plan on the latest SAP data or a new upload; add J2 overrides; set the run date for replays; retry a failed ERPNext sync | Approve or reject; change rules |
 | Raghav Kulkarni | Approve or reject a plan | Run plans or edit data in the app |
-| Procurement | View approved plans and POs; download PO files; retry a failed ERPNext sync; record a PO entered by hand if ERPNext is unavailable | Approve, reject, or change rules |
+| Procurement | View approved plans and POs; enter rates and Required By and submit POs to ERPNext; download PO files; retry a failed ERPNext sync; record a PO entered by hand if ERPNext is unavailable | Approve, reject, or change rules |
 
 Every action is written to the audit log with who, when, what, and the before and after values.
 
@@ -563,6 +564,7 @@ Every action is written to the audit log with who, when, what, and the before an
 3. **ERPNext:** when the connection is configured, each PO is created in ERPNext via its REST API: supplier matched by exact `Distributor_Name`, items by exact item code = `SKU_ID`, the approved quantities, **no rates**. The Freshroots PO number is the ERPNext PO title, so a retry never creates a duplicate. "Required By" is the PO date, because lead times are not in the data (Q6); procurement sets the real date. POs are created as **Draft** unless `ERPNEXT_SUBMIT=true`. A failed PO keeps its reason and can be retried.
 4. PDF, Excel and CSV copies are always available, with price columns shown as "—" and a note.
 5. If ERPNext is not connected, POs are kept with the reason and procurement can record an ERPNext reference entered by hand.
+6. **Completing a PO (procurement, in the planner):** procurement types a rate above 0 for every line and a Required By date on or after the PO date, reviews, and submits. The planner writes the rates and date to the ERPNext Draft and submits it through the API, so nobody signs in to ERPNext. Rates are human input: the planner never computes, suggests or changes a rate or a quantity. A submitted PO can't be changed from the planner. Each submission is in the audit log with the rates.
 
 ### 19.5 AI explanations
 

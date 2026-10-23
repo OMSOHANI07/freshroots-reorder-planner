@@ -37,11 +37,31 @@ class FakeERPNext:
     """Minimal ERPNext REST API: Supplier, Item and Purchase Order resources."""
 
     def __init__(self, missing_supplier=None):
-        self.created, self.missing_supplier = [], missing_supplier
+        self.created, self.missing_supplier, self.puts = [], missing_supplier, []
+
+    def _doc(self, path):
+        name = path.rsplit("/", 1)[-1]
+        return next((c for c in self.created if c["_name"] == name), None)
 
     def __call__(self, req: httpx.Request) -> httpx.Response:
         assert req.headers["Authorization"] == "token key1:secret1"
         path = req.url.path
+        if req.method == "GET" and "/Purchase Order/" in path:
+            doc = self._doc(path)
+            return httpx.Response(200, json={"data": doc}) if doc else httpx.Response(404, json={"exc_type": "DoesNotExistError"})
+        if req.method == "PUT" and "/Purchase Order/" in path:
+            doc, body = self._doc(path), json.loads(req.content)
+            if doc["docstatus"] != 0:
+                return httpx.Response(417, json={"exception": "Cannot edit a submitted document"})
+            if "items" in body:
+                rows = {r["name"]: r for r in doc["items"]}
+                for it in body["items"]:
+                    rows[it["name"]].update(it)
+                doc["schedule_date"] = body["schedule_date"]
+            if body.get("docstatus") == 1:
+                doc["docstatus"], doc["status"] = 1, "To Receive and Bill"
+            self.puts.append(body)
+            return httpx.Response(200, json={"data": doc})
         if req.method == "GET":
             filters = json.loads(req.url.params["filters"])
             if path.endswith("/Supplier"):
@@ -59,6 +79,10 @@ class FakeERPNext:
         if req.method == "POST" and path.endswith("/Purchase Order"):
             doc = json.loads(req.content)
             doc["_name"] = f"PUR-ORD-2026-{len(self.created) + 1:05d}"
+            doc["_sent_docstatus"] = "docstatus" in doc
+            doc["docstatus"], doc["status"] = 0, "Draft"
+            for n, it in enumerate(doc["items"]):
+                it["name"] = f"row-{len(self.created)}-{n}"
             self.created.append(doc)
             return httpx.Response(200, json={"data": {"name": doc["_name"], "status": "Draft", "docstatus": 0}})
         return httpx.Response(404, json={"exc_type": "DoesNotExistError"})
@@ -132,7 +156,6 @@ def test_approve_creates_pos_in_erpnext(client, oct_dir, monkeypatch):
     pos = r.json()["pos"]
     assert all(p["status"] == "Entered in ERPNext" and p["erp_po_name"].startswith("PUR-ORD-") and p["erp_error"] is None
                for p in pos)
-    assert all(p["erp_url"] == f"https://freshroots.example.erpnext.com/app/purchase-order/{p['erp_po_name']}" for p in pos)
     # ERPNext received exactly the approved quantities, one PO per supplier, no rates, our PO number as title
     got = {c["supplier"]: {l["item_code"]: l["qty"] for l in c["items"]} for c in fake.created}
     assert got == {"NutriFlow Distributors": {"SKU001": 750, "SKU013": 120},
@@ -140,7 +163,7 @@ def test_approve_creates_pos_in_erpnext(client, oct_dir, monkeypatch):
                    "Meridian Trade Co.": {"SKU011": 500}}
     assert all("rate" not in l for c in fake.created for l in c["items"])
     assert {c["title"] for c in fake.created} == {p["po_number"] for p in pos}
-    assert all(c["company"] == "Freshroots" and c["schedule_date"] == c["transaction_date"] and "docstatus" not in c
+    assert all(c["company"] == "Freshroots" and c["schedule_date"] == c["transaction_date"] and not c["_sent_docstatus"]
                for c in fake.created)
     audit = client.get(f"/api/audit?run_id={run_id}", headers=PROC).json()
     assert sum(a["action"] == "po.erp_created" for a in audit) == 3
@@ -228,3 +251,36 @@ def test_backfill_master_data(client, oct_dir):
     db._backfill_master_data()
     assert client.get("/api/master", headers=PROC).json()["run_id"] == run_id
     assert len(client.get("/api/master", headers=PROC).json()["skus"]) == 15
+
+
+def test_procurement_submits_po_without_erp_login(client, oct_dir, monkeypatch):
+    fake = FakeERPNext()
+    connect_erp(monkeypatch, fake)
+    run_id = upload(client, oct_dir).json()["run_id"]
+    po = next(p for p in client.post(f"/api/runs/{run_id}/approve", headers=RAGHAV).json()["pos"]
+              if p["distributor_id"] == "DIST002")
+    url = f"/api/pos/{po['id']}/erp-submit"
+    good = {"rates": {"SKU003": 92.5, "SKU004": 140.0}, "required_by": "2026-10-30"}
+    assert client.post(url, headers=RAGHAV, json=good).status_code == 403
+    assert client.post(url, headers=ANALYST, json=good).status_code == 403
+    bad = client.post(url, headers=PROC, json={"rates": {"SKU003": 0}, "required_by": "2026-01-01"})
+    assert bad.status_code == 422
+    errs = bad.json()["detail"]["errors"]
+    assert any("before the PO date" in e for e in errs) and any("SKU004" in e for e in errs) and any("SKU003" in e for e in errs)
+    assert fake.puts == []  # nothing sent to ERPNext on invalid input
+    r = client.post(url, headers=PROC, json=good)
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["status"] == "Submitted in ERPNext" and d["erp_status"] == "To Receive and Bill"
+    assert d["required_by"] == "2026-10-30" and d["total_amount"] == 92.5 * 300 + 140.0 * 150
+    erp = fake.created[[c["supplier"] for c in fake.created].index("GrainPath Logistics")]
+    assert {i["item_code"]: (i["qty"], i["rate"], i["schedule_date"]) for i in erp["items"]} == {
+        "SKU003": (300, 92.5, "2026-10-30"), "SKU004": (150, 140.0, "2026-10-30")}
+    assert erp["docstatus"] == 1
+    assert client.post(url, headers=PROC, json=good).status_code == 409  # can't submit twice
+    pdf = client.get(f"/api/pos/{po['id']}/download?format=pdf", headers=PROC)
+    text = "".join(pg.extract_text() for pg in PdfReader(io.BytesIO(pdf.content)).pages)
+    assert "92.50" in text and "48,750.00" in text
+    audit = client.get(f"/api/audit?run_id={run_id}", headers=PROC).json()
+    sub = next(a for a in audit if a["action"] == "po.erp_submitted")
+    assert sub["after"]["rates"] == {"SKU003": 92.5, "SKU004": 140.0}

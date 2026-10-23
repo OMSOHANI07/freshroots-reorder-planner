@@ -126,6 +126,29 @@ class ERPNextClient:
         return _data(r, "POST Purchase Order")
 
 
+    def get_po(self, name: str) -> dict:
+        return _data(self.http.get(f"/Purchase Order/{name}"), "GET Purchase Order")
+
+    def submit_po(self, name: str, *, rates: dict[str, float], required_by: str) -> dict:
+        """Procurement's step, done from the planner: set rates and Required By on the Draft, then submit.
+
+        Rates are typed in by procurement; nothing here computes or changes a quantity.
+        """
+        doc = self.get_po(name)
+        if doc.get("docstatus") != 0:
+            raise ERPNextError(f"{name} is already submitted or cancelled in ERPNext")
+        items = []
+        for it in doc["items"]:
+            code = it["item_code"]
+            if code not in rates:
+                raise ERPNextError(f"No rate given for {code}")
+            items.append({**{k: it[k] for k in ("name", "item_code", "qty") if k in it},
+                          "rate": rates[code], "schedule_date": required_by})
+        _data(self.http.put(f"/Purchase Order/{name}", json={"schedule_date": required_by, "items": items}),
+              "update Purchase Order")
+        return _data(self.http.put(f"/Purchase Order/{name}", json={"docstatus": 1}), "submit Purchase Order")
+
+
 def _data(r: httpx.Response, what: str):
     try:
         body = r.json()
